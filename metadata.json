@@ -1,0 +1,6 @@
+{
+  "name": "BioSaaS - Bio Sites & Agendamento para Negócios Locais",
+  "description": "Plataforma SaaS para criação e gestão de Bio Sites white-label voltada para agências e negócios locais (barbearias, manicures, clínicas, estúdios) com agendamento integrado, catálogo de serviços e pagamentos Pix.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
