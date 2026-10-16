@@ -19,7 +19,10 @@ import {
   ExternalLink,
   Navigation,
   Eye,
-  EyeOff
+  EyeOff,
+  Mail,
+  Send,
+  Star
 } from 'lucide-react';
 
 interface BioSiteViewProps {
@@ -125,20 +128,35 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
     }
   };
 
+  const isLightBg = !biosite.themeConfig.bgColor || 
+    biosite.themeConfig.bgColor.toLowerCase() === '#ffffff' || 
+    biosite.themeConfig.bgColor.toLowerCase() === '#fff' || 
+    biosite.themeConfig.bgColor.toLowerCase() === '#f8fafc' || 
+    biosite.themeConfig.bgColor.toLowerCase() === '#fafafa';
+
   return (
     <div 
       className={`min-h-full w-full transition-colors relative selection:bg-pink-500 selection:text-white ${
         isMockupFrame ? 'p-0 text-sm' : 'max-w-md mx-auto min-h-screen shadow-2xl'
       }`}
       style={{
-        background: biosite.themeConfig.bgGradient || biosite.themeConfig.bgColor,
-        color: biosite.themeConfig.textColor,
+        background: biosite.themeConfig.bgGradient || biosite.themeConfig.bgColor || '#ffffff',
+        color: biosite.themeConfig.textColor || (isLightBg ? '#171717' : '#ffffff'),
         fontFamily: biosite.themeConfig.fontFamily,
       }}
     >
       {/* Top Cover Banner */}
       <div className="relative w-full h-44 sm:h-52 overflow-hidden bg-neutral-900">
-        {biosite.coverType === 'image' && biosite.coverUrl ? (
+        {(biosite as any).videoUrl ? (
+          <video 
+            src={(biosite as any).videoUrl} 
+            autoPlay 
+            loop 
+            muted 
+            playsInline 
+            className="w-full h-full object-cover" 
+          />
+        ) : biosite.coverType === 'image' && biosite.coverUrl ? (
           <img 
             src={biosite.coverUrl} 
             alt="Capa do bio site" 
@@ -171,18 +189,24 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
         {/* Profile Card & Header */}
         <div className="flex flex-col items-center text-center">
           <div className="relative">
-            <div 
-              className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 shadow-2xl relative"
-              style={{
-                background: `linear-gradient(135deg, ${biosite.themeConfig.primaryColor}, ${biosite.themeConfig.accentColor})`,
-              }}
-            >
-              <img 
-                src={biosite.avatarUrl} 
-                alt={biosite.title}
-                className="w-full h-full object-cover rounded-full bg-neutral-800 border-2 border-black" 
-              />
-            </div>
+            {(() => {
+              const isSquareLogo = (biosite as any).logoShape === 'square';
+              const isTransparentLogo = (biosite as any).logoTransparent;
+              return (
+                <div 
+                  className={`w-24 h-24 sm:w-28 sm:h-28 ${isSquareLogo ? 'rounded-2xl' : 'rounded-full'} p-1 ${isTransparentLogo ? 'bg-transparent shadow-none' : 'shadow-2xl'} relative`}
+                  style={{
+                    background: isTransparentLogo ? 'transparent' : `linear-gradient(135deg, ${biosite.themeConfig.primaryColor}, ${biosite.themeConfig.accentColor})`,
+                  }}
+                >
+                  <img 
+                    src={biosite.avatarUrl} 
+                    alt={biosite.title}
+                    className={`w-full h-full object-cover ${isSquareLogo ? 'rounded-2xl' : 'rounded-full'} ${isTransparentLogo ? 'bg-transparent border-0' : 'bg-neutral-800 border-2 border-black'}`} 
+                  />
+                </div>
+              );
+            })()}
 
             {/* Pulsating Open/Closed Badge */}
             <div 
@@ -243,10 +267,66 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
           </button>
         </div>
 
-        {/* Action Buttons (WhatsApp, Links) */}
+        {/* Icon Only Buttons Row (e.g. Instagram round icon) */}
+        {(() => {
+          const iconOnlyButtons = biosite.contactButtons.filter(b => b.active && b.displayMode === 'icon_only');
+          if (iconOnlyButtons.length === 0) return null;
+          return (
+            <div className="flex items-center justify-center gap-3 py-1">
+              {iconOnlyButtons.map(btn => {
+                const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp';
+                const isInsta = btn.icon === 'instagram' || btn.label.toLowerCase().includes('instagram');
+                return (
+                  <a
+                    key={btn.id}
+                    href={btn.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => trackEvent(biosite.id, 'click_button', btn.id)}
+                    className={`w-11 h-11 rounded-full flex items-center justify-center transition shadow-md hover:scale-110 active:scale-95 ${
+                      btn.pulseEffect ? 'animate-pulse' : ''
+                    } ${
+                      isInsta 
+                        ? 'bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white' 
+                        : isWpp 
+                          ? 'bg-[#25D366] text-white' 
+                          : 'bg-white text-neutral-800'
+                    }`}
+                    style={{
+                      backgroundColor: btn.bgColor && btn.bgColor !== 'padrão' ? btn.bgColor : undefined,
+                      color: btn.textColor && btn.textColor !== 'padrão' ? btn.textColor : undefined,
+                    }}
+                    title={btn.label}
+                  >
+                    {isInsta ? (
+                      <Instagram className="w-5 h-5" />
+                    ) : isWpp ? (
+                      <MessageCircle className="w-5 h-5" />
+                    ) : (
+                      <Globe className="w-5 h-5" />
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* Full Action Buttons (WhatsApp, Instagram, Pix, Links) */}
         <div className="space-y-2.5">
-          {biosite.contactButtons.filter(b => b.active).map(btn => {
-            const isWpp = btn.isWhatsApp;
+          {biosite.contactButtons.filter(b => b.active && b.displayMode !== 'icon_only').map(btn => {
+            const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp' || btn.label.toLowerCase().includes('whatsapp');
+            const isInsta = btn.icon === 'instagram' || btn.label.toLowerCase().includes('instagram');
+            
+            // Custom or preset color
+            const defaultBg = isWpp 
+              ? '#22c55e' 
+              : isInsta 
+                ? '#e1306c' 
+                : biosite.themeConfig.cardBg;
+            const bg = (btn.bgColor && btn.bgColor !== 'padrão') ? btn.bgColor : defaultBg;
+            const text = (btn.textColor && btn.textColor !== 'padrão') ? btn.textColor : '#ffffff';
+
             return (
               <a
                 key={btn.id}
@@ -258,28 +338,81 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => trackEvent(biosite.id, 'click_button', btn.id)}
-                className={`w-full py-3 px-4 flex items-center justify-between transition group font-semibold text-sm border ${getButtonClass()} ${
-                  isWpp 
-                    ? 'bg-emerald-600/90 hover:bg-emerald-500 text-white border-emerald-500/40 shadow-md shadow-emerald-950/20' 
-                    : 'hover:brightness-110'
-                }`}
+                className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} ${
+                  btn.pulseEffect ? 'animate-pulse' : ''
+                } hover:brightness-110 active:scale-[0.99]`}
                 style={{
-                  backgroundColor: !isWpp ? biosite.themeConfig.cardBg : undefined,
-                  borderColor: !isWpp ? `${biosite.themeConfig.primaryColor}33` : undefined,
+                  backgroundColor: bg,
+                  color: text,
+                  borderColor: 'rgba(255,255,255,0.15)',
                 }}
               >
                 <div className="flex items-center gap-2.5">
-                  {btn.icon === 'whatsapp' && <MessageCircle className="w-4 h-4 text-emerald-300" />}
-                  {btn.icon === 'instagram' && <Instagram className="w-4 h-4 text-pink-400" />}
-                  {btn.icon === 'phone' && <Phone className="w-4 h-4 text-blue-400" />}
-                  {btn.icon === 'globe' && <Globe className="w-4 h-4 text-amber-400" />}
-                  {btn.icon === 'map' && <MapPin className="w-4 h-4 text-red-400" />}
+                  {isWpp ? (
+                    <MessageCircle className="w-4 h-4" />
+                  ) : isInsta ? (
+                    <Instagram className="w-4 h-4" />
+                  ) : btn.icon === 'phone' ? (
+                    <Phone className="w-4 h-4" />
+                  ) : btn.icon === 'mail' ? (
+                    <Mail className="w-4 h-4" />
+                  ) : (
+                    <Globe className="w-4 h-4" />
+                  )}
                   <span>{btn.label}</span>
                 </div>
-                <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-1 transition" />
+                <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
               </a>
             );
           })}
+
+          {/* Quick Pix Button in buttons list if configured */}
+          {biosite.pixConfig?.pixKey && (
+            <button
+              type="button"
+              onClick={handleCopyPix}
+              className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} hover:brightness-110 active:scale-[0.99] cursor-pointer`}
+              style={{
+                backgroundColor: (biosite.pixConfig.buttonBgColor && biosite.pixConfig.buttonBgColor !== 'padrão') 
+                  ? biosite.pixConfig.buttonBgColor 
+                  : '#e1306c',
+                color: (biosite.pixConfig.buttonTextColor && biosite.pixConfig.buttonTextColor !== 'padrão') 
+                  ? biosite.pixConfig.buttonTextColor 
+                  : '#ffffff',
+                borderColor: 'rgba(255,255,255,0.15)',
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <QrCode className="w-4 h-4" />
+                <span>Chave Pix</span>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
+            </button>
+          )}
+
+          {/* WiFi Button in buttons list if configured */}
+          {biosite.wifiConfig?.networkName && (
+            <button
+              type="button"
+              onClick={handleCopyWifi}
+              className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} hover:brightness-110 active:scale-[0.99] cursor-pointer`}
+              style={{
+                backgroundColor: (biosite.wifiConfig.buttonBgColor && biosite.wifiConfig.buttonBgColor !== 'padrão') 
+                  ? biosite.wifiConfig.buttonBgColor 
+                  : biosite.themeConfig.cardBg,
+                color: (biosite.wifiConfig.buttonTextColor && biosite.wifiConfig.buttonTextColor !== 'padrão') 
+                  ? biosite.wifiConfig.buttonTextColor 
+                  : biosite.themeConfig.textColor,
+                borderColor: 'rgba(255,255,255,0.15)',
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <Wifi className="w-4 h-4" />
+                <span>Wi-Fi: {biosite.wifiConfig.networkName}</span>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
+            </button>
+          )}
         </div>
 
         {/* SERVICES CATALOG & CAROUSEL */}
@@ -325,8 +458,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
                   key={service.id}
                   className={`overflow-hidden border transition group relative ${getButtonClass()}`}
                   style={{
-                    backgroundColor: biosite.themeConfig.cardBg,
-                    borderColor: `${biosite.themeConfig.primaryColor}25`,
+                    backgroundColor: isLightBg ? '#ffffff' : biosite.themeConfig.cardBg,
+                    borderColor: isLightBg ? '#e5e7eb' : `${biosite.themeConfig.primaryColor}25`,
+                    boxShadow: isLightBg ? '0 1px 3px rgba(0,0,0,0.06)' : undefined,
                   }}
                 >
                   {/* Photo Carousel Header */}
@@ -379,12 +513,12 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
                   <div className="p-3.5 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-bold text-sm text-white group-hover:text-pink-300 transition">
+                        <h3 className={`font-bold text-sm transition ${isLightBg ? 'text-neutral-900 group-hover:text-pink-600' : 'text-white group-hover:text-pink-300'}`}>
                           {service.name}
                         </h3>
-                        <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-0.5">
+                        <div className={`flex items-center gap-2 text-[11px] mt-0.5 ${isLightBg ? 'text-neutral-500' : 'text-neutral-400'}`}>
                           <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-neutral-400" />
+                            <Clock className={`w-3 h-3 ${isLightBg ? 'text-neutral-500' : 'text-neutral-400'}`} />
                             {service.durationMinutes} min
                           </span>
                           <span>•</span>
@@ -399,12 +533,12 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
                             <span className="text-[10px] text-neutral-400 line-through block">
                               R$ {service.price.toFixed(2).replace('.', ',')}
                             </span>
-                            <span className="text-sm font-extrabold text-emerald-400">
+                            <span className={`text-sm font-extrabold ${isLightBg ? 'text-emerald-600' : 'text-emerald-400'}`}>
                               R$ {service.promotionalPrice.toFixed(2).replace('.', ',')}
                             </span>
                           </>
                         ) : (
-                          <span className="text-sm font-extrabold text-emerald-400">
+                          <span className={`text-sm font-extrabold ${isLightBg ? 'text-emerald-600' : 'text-emerald-400'}`}>
                             R$ {service.price.toFixed(2).replace('.', ',')}
                           </span>
                         )}

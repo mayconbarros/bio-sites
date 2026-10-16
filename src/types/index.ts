@@ -31,11 +31,19 @@ export interface ThemeConfig {
 export interface ContactButton {
   id: string;
   label: string;
-  icon: 'whatsapp' | 'instagram' | 'phone' | 'globe' | 'map' | 'tiktok' | 'youtube' | 'custom';
+  icon: string;
   url: string;
   isWhatsApp: boolean;
   prefilledMessage?: string;
   active: boolean;
+  type?: string;
+  phone?: string;
+  email?: string;
+  lucideIcon?: string;
+  bgColor?: string;
+  textColor?: string;
+  displayMode?: 'icon_only' | 'full_button';
+  pulseEffect?: boolean;
 }
 
 export type PixKeyType = 'phone' | 'email' | 'cpf' | 'cnpj' | 'random';
@@ -46,12 +54,21 @@ export interface PixConfig {
   pixKey: string;
   beneficiaryName: string;
   city: string;
+  instantPix?: boolean;
+  hasCardBg?: boolean;
+  cardTextColor?: string;
+  buttonBgColor?: string;
+  buttonTextColor?: string;
 }
 
 export interface WifiConfig {
   enabled: boolean;
   networkName: string;
   password: string;
+  hasCardBg?: boolean;
+  cardTextColor?: string;
+  buttonBgColor?: string;
+  buttonTextColor?: string;
 }
 
 export interface LocationConfig {
@@ -142,8 +159,11 @@ export interface Biosite {
   description: string;
   category: 'manicure' | 'barbearia' | 'estetica' | 'salao' | 'outro';
   avatarUrl: string;
+  logoShape?: 'circle' | 'square';
+  logoTransparent?: boolean;
   coverType: CoverType;
   coverUrl?: string;
+  videoUrl?: string;
   coverGradient?: string;
   instagramHandle: string;
   themeConfig: ThemeConfig;
