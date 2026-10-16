@@ -782,7 +782,7 @@ export const ClientDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 bg-white text-neutral-900 min-h-screen flex flex-col font-sans select-none">
+    <div className="flex-1 bg-white text-neutral-900 h-screen flex flex-col font-sans select-none overflow-hidden">
       
       {/* 1. TOPMOST BAR matching screenshot: "← Voltar pros meus sites" and right actions */}
       <div className="w-full bg-white border-b border-neutral-200 px-6 py-2.5 flex items-center justify-between text-xs text-neutral-600 shrink-0">
@@ -886,11 +886,11 @@ export const ClientDashboard: React.FC = () => {
       </div>
 
       {/* 3. MAIN WORKSPACE: SIDEBAR + CONTENT AREA */}
-      <div className="flex-1 flex min-w-0 bg-[#fafafa]">
+      <div className="flex-1 flex min-w-0 bg-[#fafafa] overflow-hidden">
         
         {/* Left Sidebar inside the Panel matching screenshot */}
         {!sidebarCollapsed && (
-          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 min-h-[calc(100vh-92px)] overflow-y-auto">
+          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 h-full overflow-y-auto">
             <div className="space-y-6">
               {NAV_SECTIONS.map((sec, secIdx) => (
                 <div key={secIdx}>
@@ -1364,7 +1364,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
@@ -1756,7 +1756,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone/desktop frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
@@ -2478,7 +2478,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone/desktop frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-4 ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
