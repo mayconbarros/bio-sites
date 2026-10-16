@@ -19,6 +19,8 @@ import {
   Check,
   FolderPlus
 } from 'lucide-react';
+import emptyStateIllustration from '../../assets/images/empty_state_illustration_1791938807425.jpg';
+import { EMPTY_STATE_ILLUSTRATION_BASE64 } from '../../assets/images/emptyStateIllustrationBase64';
 
 export const AgencyDashboard: React.FC = () => {
   const { 
@@ -89,7 +91,8 @@ export const AgencyDashboard: React.FC = () => {
     setNewTitle('');
     setNewClientName('');
     setNewClientPhone('');
-    setEditingSiteId(created.id);
+    setActiveBiositeId(created.id);
+    setCurrentView('client');
   };
 
   const handleSaveAgencySettings = (e: React.FormEvent) => {
@@ -167,9 +170,13 @@ export const AgencyDashboard: React.FC = () => {
           {/* Exact Image Loaded Directly in the Code */}
           <div className="relative mb-4 flex justify-center">
             <img 
-              src="/src/assets/images/empty_state_illustration_1791938807425.jpg" 
+              src={EMPTY_STATE_ILLUSTRATION_BASE64 || emptyStateIllustration} 
+              onError={(e) => {
+                const target = e.currentTarget as HTMLImageElement;
+                target.onerror = null;
+                target.src = emptyStateIllustration || '/empty_state_illustration_1791938807425.jpg';
+              }}
               alt="Bora criar seu primeiro mini-site"
-              referrerPolicy="no-referrer"
               className="w-72 sm:w-80 h-72 sm:h-80 object-contain mx-auto select-none" 
             />
           </div>
@@ -331,11 +338,14 @@ export const AgencyDashboard: React.FC = () => {
                   <div className="p-4 pt-0 space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => setEditingSiteId(site.id)}
+                        onClick={() => {
+                          setActiveBiositeId(site.id);
+                          setCurrentView('client');
+                        }}
                         className="py-2.5 px-3 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
-                        Editar Site
+                        Gerenciar Site
                       </button>
 
                       <button

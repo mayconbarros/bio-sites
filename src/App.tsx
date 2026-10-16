@@ -16,8 +16,8 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 flex font-sans antialiased">
-      {/* Left Sidebar Classic SaaS layout */}
-      <Sidebar />
+      {/* Left Sidebar Classic SaaS layout for Agency only */}
+      {currentView === 'agency' && <Sidebar />}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
