@@ -61,7 +61,9 @@ import {
   Youtube,
   Facebook,
   Linkedin,
-  Twitter
+  Twitter,
+  Scissors,
+  Edit3
 } from 'lucide-react';
 
 const PRESET_BUTTON_COLORS = [
@@ -232,6 +234,9 @@ export const ClientDashboard: React.FC = () => {
     updateBiosite,
     appointments, 
     services, 
+    addService,
+    updateService,
+    deleteService,
     updateAppointmentStatus, 
     addAppointment,
     setCurrentView,
@@ -246,6 +251,13 @@ export const ClientDashboard: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // State for Catálogo tab (Carrossel & Catálogos)
+  const [carouselAutoplay, setCarouselAutoplay] = useState<boolean>(true);
+  const [carouselInterval, setCarouselInterval] = useState<number>(4);
+  const [catalogsList, setCatalogsList] = useState<Array<{ id: string; title: string; itemCount: number }>>([]);
+  const [newCatalogModalOpen, setNewCatalogModalOpen] = useState<boolean>(false);
+  const [newCatalogTitle, setNewCatalogTitle] = useState<string>('');
 
   // Appointments state for the "Agendamentos" tab
   const [dateFilter, setDateFilter] = useState<'today' | 'upcoming' | 'all'>('today');
@@ -2611,8 +2623,199 @@ export const ClientDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* TAB: CATÁLOGO */}
+          {selectedTab === 'catalogo' && previewBiosite && (
+            <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col xl:flex-row gap-8 items-start">
+                
+                {/* Coluna da Esquerda (Conteúdo/Formulários): flex-1 min-w-0 space-y-6 */}
+                <div className="flex-1 min-w-0 space-y-6">
+                  
+                  {/* Card 1 (Carrossel) */}
+                  <div className="bg-white rounded-3xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-base font-extrabold text-neutral-900 tracking-tight">
+                          Passagem automática
+                        </h3>
+                        <p className="text-xs text-neutral-500 mt-0.5 font-medium">
+                          Os itens trocam sozinhos como um carrossel.
+                        </p>
+                      </div>
+
+                      {/* Toggle Switch */}
+                      <button
+                        type="button"
+                        onClick={() => setCarouselAutoplay(!carouselAutoplay)}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                          carouselAutoplay ? 'bg-[#ff2a85]' : 'bg-neutral-200'
+                        }`}
+                      >
+                        <span className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
+                          carouselAutoplay ? 'translate-x-5' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+                    </div>
+
+                    {/* Slider: Tempo entre itens [X]s com régua deslizante de 2s a 15s */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between text-xs font-bold text-neutral-800">
+                        <span>Tempo entre itens</span>
+                        <span className="font-mono text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded-md text-xs">
+                          {carouselInterval}s
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={2}
+                        max={15}
+                        step={1}
+                        value={carouselInterval}
+                        onChange={e => setCarouselInterval(Number(e.target.value))}
+                        className="w-full accent-[#ff2a85] cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-neutral-400 font-medium">
+                        <span>2s</span>
+                        <span>15s</span>
+                      </div>
+                    </div>
+
+                    {/* Ação: Botão verde-limão/amarelo: Salvar configuração do carrossel */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast('Configuração do carrossel salva!', 'success');
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 font-black text-xs shadow-xs transition cursor-pointer"
+                      >
+                        Salvar configuração do carrossel
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 2 (Lista de Catálogos) */}
+                  <div className="bg-white rounded-3xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
+                    {/* Cabeçalho */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100">
+                      <div>
+                        <h3 className="text-base font-extrabold text-neutral-900 tracking-tight">
+                          Seus catálogos
+                        </h3>
+                        <p className="text-xs text-neutral-500 mt-0.5 font-medium">
+                          Crie quantos quiser (ex: Fotos, Vídeos, Promoções). Arraste para reordenar.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewCatalogModalOpen(true)}
+                        className="px-4 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 font-black text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer self-start sm:self-auto shrink-0"
+                      >
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <span>+ Novo catálogo</span>
+                      </button>
+                    </div>
+
+                    {/* Estado Vazio ou Lista */}
+                    {catalogsList.length === 0 ? (
+                      <div className="p-12 text-center rounded-2xl border border-neutral-200/80 bg-neutral-50/40">
+                        <p className="text-xs text-neutral-500 font-medium">
+                          Nenhum catálogo criado. Clique em 'Novo catálogo' para começar.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {catalogsList.map(cat => (
+                          <div 
+                            key={cat.id} 
+                            className="p-4 rounded-2xl border border-neutral-200 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-neutral-300 transition"
+                          >
+                            <div className="flex items-center gap-3">
+                              <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
+                              <div>
+                                <h4 className="text-xs font-bold text-neutral-900">{cat.title}</h4>
+                                <span className="text-[11px] text-neutral-500 font-medium">{cat.itemCount} itens</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setCatalogsList(prev => prev.filter(c => c.id !== cat.id))}
+                              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-500 transition cursor-pointer"
+                              title="Excluir catálogo"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Coluna da Direita (Preview/Celular): w-[360px] shrink-0 sticky top-6 self-start */}
+                <div className="w-[360px] shrink-0 sticky top-6 self-start space-y-3 mx-auto xl:mx-0 max-h-[calc(100vh-2rem)] overflow-y-auto">
+                  
+                  {/* Header Row */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-black text-neutral-800 tracking-wider uppercase">
+                      PREVIEW AO VIVO
+                    </span>
+
+                    <div className="flex items-center gap-1 p-0.5 rounded-full bg-neutral-200/60 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDevice('mobile')}
+                        className={`px-3 py-1 rounded-full text-xs transition cursor-pointer flex items-center gap-1 ${
+                          previewDevice === 'mobile'
+                            ? 'bg-[#ff007f] text-white font-bold shadow-xs'
+                            : 'text-neutral-600 hover:text-neutral-900 font-semibold'
+                        }`}
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>Mobile</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDevice('desktop')}
+                        className={`px-3 py-1 rounded-full text-xs transition cursor-pointer flex items-center gap-1 ${
+                          previewDevice === 'desktop'
+                            ? 'bg-[#ff007f] text-white font-bold shadow-xs'
+                            : 'text-neutral-600 hover:text-neutral-900 font-semibold'
+                        }`}
+                      >
+                        <Monitor className="w-3 h-3" />
+                        <span>Desktop</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Desktop Preview vs Smartphone Frame Mockup */}
+                  {previewDevice === 'desktop' ? (
+                    <div className="w-full rounded-[26px] border-[3px] border-neutral-900 bg-white shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-200">
+                      <div className="h-[560px] overflow-y-auto">
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={false} onMoveButton={moveButton} />
+                      </div>
+                    </div>
+                  ) : (
+                    /* SMARTPHONE FRAME WITH NOTCH */
+                    <div className="w-full rounded-[44px] border-[8px] border-neutral-900 bg-neutral-900 shadow-2xl overflow-hidden relative animate-in fade-in duration-200">
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-neutral-900 rounded-b-xl z-20 pointer-events-none" />
+                      <div className="h-[560px] overflow-y-auto bg-white rounded-[36px] overflow-x-hidden">
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} onMoveButton={moveButton} />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* EDITING TABS: Re-uses BioSiteEditor smoothly */}
-          {(['titulos', 'catalogo', 'endereco', 'leads', 'layout', 'links', 'servicos', 'profissionais', 'pix', 'cadastros'].includes(selectedTab)) && (
+          {(['titulos', 'endereco', 'leads', 'layout', 'links', 'profissionais', 'pix', 'cadastros'].includes(selectedTab)) && (
             <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-neutral-200 p-6 shadow-2xs animate-in fade-in duration-200">
               <BioSiteEditor 
                 biosite={activeBiosite} 
@@ -2774,6 +2977,71 @@ export const ClientDashboard: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs transition"
                 >
                   Salvar Agendamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Novo Catálogo */}
+      {newCatalogModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-neutral-900">
+                Novo Catálogo
+              </h3>
+              <button
+                type="button"
+                onClick={() => setNewCatalogModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCatalogTitle.trim()) return;
+                setCatalogsList(prev => [
+                  ...prev,
+                  { id: `cat-${Date.now()}`, title: newCatalogTitle.trim(), itemCount: 0 }
+                ]);
+                setNewCatalogTitle('');
+                setNewCatalogModalOpen(false);
+                showToast('Catálogo criado com sucesso!', 'success');
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-xs font-bold text-neutral-700 block mb-1">
+                  Nome do Catálogo *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Fotos dos Trabalhos, Promoções, Cursos"
+                  value={newCatalogTitle}
+                  onChange={e => setNewCatalogTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-neutral-900 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/20"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewCatalogModalOpen(false)}
+                  className="w-1/2 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 text-xs font-black shadow-xs transition"
+                >
+                  Criar Catálogo
                 </button>
               </div>
             </form>
