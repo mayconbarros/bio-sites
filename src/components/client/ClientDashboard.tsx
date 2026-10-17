@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
@@ -272,21 +272,46 @@ export const ClientDashboard: React.FC = () => {
     } catch {}
   }, [catalogsList]);
 
-  const handleAddCatalog = () => {
+  const [isNewCatalogModalOpen, setIsNewCatalogModalOpen] = useState(false);
+  const [newCatalogTitle, setNewCatalogTitle] = useState('Nossos serviços');
+  const newCatalogInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenNewCatalogModal = () => {
+    setNewCatalogTitle('Nossos serviços');
+    setIsNewCatalogModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (isNewCatalogModalOpen) {
+      const timer = setTimeout(() => {
+        if (newCatalogInputRef.current) {
+          newCatalogInputRef.current.focus();
+          newCatalogInputRef.current.select();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isNewCatalogModalOpen]);
+
+  const handleConfirmCreateCatalog = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const finalTitle = newCatalogTitle.trim() || 'Nossos serviços';
     const newCat: CatalogSection = {
       id: `cat-${Date.now()}`,
-      title: 'Nossos serviços',
+      title: finalTitle,
       itemCount: 0,
       active: true,
       isExpanded: true,
       items: [],
     };
     setCatalogsList(prev => [...prev, newCat]);
+    setIsNewCatalogModalOpen(false);
     setFloatingToast('Catálogo criado');
     setTimeout(() => {
       setFloatingToast(null);
     }, 3500);
   };
+
 
   const handleToggleExpandCatalog = (id: string) => {
     setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, isExpanded: !c.isExpanded } : c));
@@ -2817,7 +2842,7 @@ export const ClientDashboard: React.FC = () => {
 
                       <button
                         type="button"
-                        onClick={handleAddCatalog}
+                        onClick={handleOpenNewCatalogModal}
                         className="px-4 py-2 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-bold text-xs shadow-2xs transition cursor-pointer shrink-0 flex items-center gap-1"
                       >
                         <span>+ Novo catálogo</span>
@@ -2827,7 +2852,7 @@ export const ClientDashboard: React.FC = () => {
                     {/* Estado Vazio (Regra 1: se length === 0) */}
                     {catalogsList.length === 0 ? (
                       <div 
-                        onClick={handleAddCatalog}
+                        onClick={handleOpenNewCatalogModal}
                         className="bg-white rounded-2xl border border-neutral-200 py-10 px-6 text-center shadow-2xs cursor-pointer hover:border-neutral-300 transition"
                       >
                         <p className="text-xs text-neutral-500 font-medium">
@@ -3341,8 +3366,79 @@ export const ClientDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Modal Novo Catálogo - Conforme design do print */}
+      {isNewCatalogModalOpen && (
+        <div 
+          tabIndex={-1}
+          onKeyDown={e => {
+            if (e.key === 'Escape') setIsNewCatalogModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsNewCatalogModalOpen(false)}
+        >
+          <div 
+            className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl border border-neutral-100 relative animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Botão de Fechar X no topo direito */}
+            <button
+              type="button"
+              onClick={() => setIsNewCatalogModalOpen(false)}
+              className="absolute top-5 right-5 text-neutral-700 hover:text-neutral-950 p-1.5 rounded-full hover:bg-neutral-100 transition cursor-pointer"
+              title="Fechar"
+            >
+              <X className="w-4 h-4 stroke-[2.5]" />
+            </button>
 
+            {/* Título */}
+            <h3 className="text-lg font-bold text-neutral-900 tracking-tight">
+              Novo catálogo
+            </h3>
+
+            {/* Subtítulo / Instrução */}
+            <p className="text-xs sm:text-[13px] text-neutral-700 mt-2 font-normal leading-relaxed">
+              Dê um nome para o catálogo (ex: Fotos da loja, Vídeos, Promoções).
+            </p>
+
+            {/* Formulário com label, campo de texto e botões */}
+            <form onSubmit={handleConfirmCreateCatalog} className="mt-5">
+              <div>
+                <label className="text-xs font-bold text-neutral-900 block mb-2">
+                  Nome do catálogo
+                </label>
+                <input
+                  ref={newCatalogInputRef}
+                  type="text"
+                  value={newCatalogTitle}
+                  onChange={e => setNewCatalogTitle(e.target.value)}
+                  placeholder="Nossos serviços"
+                  className="w-full px-4 py-2.5 text-xs sm:text-sm text-neutral-900 bg-white rounded-2xl border border-neutral-300 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition"
+                />
+              </div>
+
+              {/* Botões Cancelar e Criar alinhados à direita */}
+              <div className="flex items-center justify-end gap-2.5 mt-6 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsNewCatalogModalOpen(false)}
+                  className="px-5 py-2.5 rounded-2xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-900 text-xs font-bold transition shadow-2xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-2xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 text-xs font-bold transition shadow-2xs cursor-pointer"
+                >
+                  Criar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
+
   );
 };
