@@ -44,6 +44,7 @@ export interface ContactButton {
   textColor?: string;
   displayMode?: 'icon_only' | 'full_button';
   pulseEffect?: boolean;
+  isSpecial?: string;
 }
 
 export type PixKeyType = 'phone' | 'email' | 'cpf' | 'cnpj' | 'random';

@@ -68,7 +68,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Initialize state with LocalStorage if available
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
     const saved = localStorage.getItem('biosaas_biosites');
-    return saved ? JSON.parse(saved) : INITIAL_BIOSITES;
+    const rawList: Biosite[] = saved ? JSON.parse(saved) : INITIAL_BIOSITES;
+    return rawList.map(b => {
+      const existing = b.contactButtons || [];
+      const hasBooking = existing.some(btn => btn.id === 'btn-booking' || btn.type === 'Agendar' || (btn as any).isSpecial === 'booking');
+      const hasPix = existing.some(btn => btn.id === 'btn-pix' || btn.type === 'Pix' || (btn as any).isSpecial === 'pix');
+      const hasWifi = existing.some(btn => btn.id === 'btn-wifi' || btn.type === 'WiFi' || (btn as any).isSpecial === 'wifi');
+      const fullList = [...existing];
+      if (!hasBooking) {
+        fullList.unshift({
+          id: 'btn-booking',
+          label: 'Agendar Horário Online',
+          icon: 'Sparkles',
+          lucideIcon: 'Sparkles',
+          url: '#agendar',
+          isWhatsApp: false,
+          active: true,
+          type: 'Agendar',
+          isSpecial: 'booking',
+          displayMode: 'full_button',
+          pulseEffect: false,
+          bgColor: 'padrão',
+          textColor: 'padrão',
+        });
+      }
+      if (!hasPix && b.pixConfig?.pixKey) {
+        fullList.push({
+          id: 'btn-pix',
+          label: 'Chave Pix',
+          icon: 'QrCode',
+          lucideIcon: 'QrCode',
+          url: '#pix',
+          isWhatsApp: false,
+          active: true,
+          type: 'Pix',
+          isSpecial: 'pix',
+          displayMode: 'full_button',
+          pulseEffect: false,
+          bgColor: b.pixConfig.buttonBgColor || 'padrão',
+          textColor: b.pixConfig.buttonTextColor || 'padrão',
+        });
+      }
+      if (!hasWifi && b.wifiConfig?.networkName) {
+        fullList.push({
+          id: 'btn-wifi',
+          label: `Wi-Fi: ${b.wifiConfig.networkName}`,
+          icon: 'Wifi',
+          lucideIcon: 'Wifi',
+          url: '#wifi',
+          isWhatsApp: false,
+          active: true,
+          type: 'WiFi',
+          isSpecial: 'wifi',
+          displayMode: 'full_button',
+          pulseEffect: false,
+          bgColor: b.wifiConfig.buttonBgColor || 'padrão',
+          textColor: b.wifiConfig.buttonTextColor || 'padrão',
+        });
+      }
+      return { ...b, contactButtons: fullList };
+    });
   });
 
   const [services, setServices] = useState<Service[]>(() => {

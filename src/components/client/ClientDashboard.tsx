@@ -381,6 +381,8 @@ export const ClientDashboard: React.FC = () => {
     { id: 'twitch', label: 'Twitch', icon: 'Tv', defaultUrl: 'https://twitch.tv/', type: 'Twitch' },
     { id: 'spotify', label: 'Spotify', icon: 'Music', defaultUrl: 'https://open.spotify.com/', type: 'Spotify' },
     { id: 'agendar', label: 'Agendar', icon: 'Calendar', defaultUrl: '#agendar', type: 'Agendar' },
+    { id: 'pix', label: 'Chave Pix', icon: 'QrCode', defaultUrl: '#pix', type: 'Pix' },
+    { id: 'wifi', label: 'Wi-Fi', icon: 'Wifi', defaultUrl: '#wifi', type: 'WiFi' },
     { id: 'site', label: 'Site', icon: 'Globe', defaultUrl: 'https://', type: 'Site' },
     { id: 'ligar', label: 'Ligar', icon: 'Phone', defaultUrl: 'tel:+5598991506106', type: 'Ligar', defaultPhone: '+55 (98) 99150-6106' },
     { id: 'email', label: 'Email', icon: 'Mail', defaultUrl: 'mailto:contato@exemplo.com', type: 'Email' },
@@ -390,17 +392,73 @@ export const ClientDashboard: React.FC = () => {
 
   // Buttons state matching screenshots
   const [buttonsList, setButtonsList] = useState<any[]>(() => {
-    if (activeBiosite?.contactButtons && activeBiosite.contactButtons.length > 0) {
-      return activeBiosite.contactButtons.map(b => ({
-        ...b,
-        type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label.includes('Instagram') ? 'Instagram' : b.label),
-        displayMode: b.displayMode || 'full_button',
-        pulseEffect: b.pulseEffect || false,
-        bgColor: b.bgColor || 'padrão',
-        textColor: b.textColor || 'padrão',
-      }));
+    const rawButtons = activeBiosite?.contactButtons || [];
+    const existing = rawButtons.map(b => ({
+      ...b,
+      type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
+      displayMode: 'full_button',
+      pulseEffect: b.pulseEffect || false,
+      bgColor: b.bgColor || 'padrão',
+      textColor: b.textColor || 'padrão',
+    }));
+
+    const hasBooking = existing.some(b => b.id === 'btn-booking' || b.type === 'Agendar' || (b as any).isSpecial === 'booking');
+    const hasPix = existing.some(b => b.id === 'btn-pix' || b.type === 'Pix' || (b as any).isSpecial === 'pix');
+    const hasWifi = existing.some(b => b.id === 'btn-wifi' || b.type === 'WiFi' || (b as any).isSpecial === 'wifi');
+
+    const fullList = [...existing];
+    if (!hasBooking) {
+      fullList.unshift({
+        id: 'btn-booking',
+        label: 'Agendar Horário Online',
+        icon: 'Sparkles',
+        lucideIcon: 'Sparkles',
+        url: '#agendar',
+        isWhatsApp: false,
+        type: 'Agendar',
+        isSpecial: 'booking',
+        active: true,
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: 'padrão',
+        textColor: 'padrão',
+      });
     }
-    return [];
+    if (!hasPix && activeBiosite?.pixConfig?.pixKey) {
+      fullList.push({
+        id: 'btn-pix',
+        label: 'Chave Pix',
+        icon: 'QrCode',
+        lucideIcon: 'QrCode',
+        url: '#pix',
+        isWhatsApp: false,
+        type: 'Pix',
+        isSpecial: 'pix',
+        active: true,
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: activeBiosite.pixConfig.buttonBgColor || 'padrão',
+        textColor: activeBiosite.pixConfig.buttonTextColor || 'padrão',
+      });
+    }
+    if (!hasWifi && activeBiosite?.wifiConfig?.networkName) {
+      fullList.push({
+        id: 'btn-wifi',
+        label: `Wi-Fi: ${activeBiosite.wifiConfig.networkName}`,
+        icon: 'Wifi',
+        lucideIcon: 'Wifi',
+        url: '#wifi',
+        isWhatsApp: false,
+        type: 'WiFi',
+        isSpecial: 'wifi',
+        active: true,
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: activeBiosite.wifiConfig.buttonBgColor || 'padrão',
+        textColor: activeBiosite.wifiConfig.buttonTextColor || 'padrão',
+      });
+    }
+    return fullList;
   });
 
   const [expandedButtonIds, setExpandedButtonIds] = useState<string[]>([]);
@@ -437,12 +495,12 @@ export const ClientDashboard: React.FC = () => {
       icon: model.icon,
       lucideIcon: model.icon,
       url: model.defaultUrl,
-      isWhatsApp: !!model.isWhatsApp,
+      isWhatsApp: !!(model as any).isWhatsApp,
       phone: (model as any).defaultPhone || (model.id === 'whatsapp' ? '+55 (98) 99150-6106' : ''),
       prefilledMessage: (model as any).defaultMessage || '',
       type: model.type,
       active: true,
-      displayMode: model.id === 'instagram' ? 'icon_only' : 'full_button',
+      displayMode: 'full_button',
       pulseEffect: false,
       bgColor: 'padrão',
       textColor: 'padrão',
@@ -477,6 +535,22 @@ export const ClientDashboard: React.FC = () => {
 
   const handleUpdateButton = (id: string, patch: any) => {
     setButtonsList(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
+    setHasUnsavedButtonChanges(true);
+  };
+
+  const moveButton = (indexOrId: number | string, direction: 'up' | 'down') => {
+    setButtonsList(prev => {
+      const index = typeof indexOrId === 'number' 
+        ? indexOrId 
+        : prev.findIndex(b => b.id === indexOrId);
+      if (index < 0 || index >= prev.length) return prev;
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const nextList = [...prev];
+      const [movedItem] = nextList.splice(index, 1);
+      nextList.splice(targetIndex, 0, movedItem);
+      return nextList;
+    });
     setHasUnsavedButtonChanges(true);
   };
 
@@ -782,7 +856,7 @@ export const ClientDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 bg-white text-neutral-900 h-screen flex flex-col font-sans select-none overflow-hidden">
+    <div className="flex-1 bg-white text-neutral-900 min-h-screen flex flex-col font-sans select-none">
       
       {/* 1. TOPMOST BAR matching screenshot: "← Voltar pros meus sites" and right actions */}
       <div className="w-full bg-white border-b border-neutral-200 px-6 py-2.5 flex items-center justify-between text-xs text-neutral-600 shrink-0">
@@ -886,11 +960,11 @@ export const ClientDashboard: React.FC = () => {
       </div>
 
       {/* 3. MAIN WORKSPACE: SIDEBAR + CONTENT AREA */}
-      <div className="flex-1 flex min-w-0 bg-[#fafafa] overflow-hidden">
+      <div className="flex-1 flex min-w-0 bg-[#fafafa]">
         
         {/* Left Sidebar inside the Panel matching screenshot */}
         {!sidebarCollapsed && (
-          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 h-full overflow-y-auto">
+          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 min-h-[calc(100vh-92px)]">
             <div className="space-y-6">
               {NAV_SECTIONS.map((sec, secIdx) => (
                 <div key={secIdx}>
@@ -924,7 +998,7 @@ export const ClientDashboard: React.FC = () => {
         )}
 
         {/* Right Main Content */}
-        <main className="flex-1 p-6 lg:p-8 overflow-y-auto min-w-0">
+        <main className="flex-1 p-6 lg:p-8 min-w-0">
           
           {/* TAB: ESTATÍSTICAS (EXACT REFERENCE SCREENSHOT) */}
           {selectedTab === 'estatisticas' && (
@@ -1364,7 +1438,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
@@ -1451,7 +1525,7 @@ export const ClientDashboard: React.FC = () => {
                     <div className="w-full rounded-[44px] border-[8px] border-neutral-900 bg-neutral-900 shadow-2xl overflow-hidden relative animate-in fade-in duration-200">
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-neutral-900 rounded-b-xl z-20 pointer-events-none" />
                       <div className="h-[560px] overflow-y-auto bg-white rounded-[36px] overflow-x-hidden">
-                        <BioSiteView biosite={activeBiosite} isMockupFrame={true} />
+                        <BioSiteView biosite={previewBiosite || activeBiosite} isMockupFrame={true} onMoveButton={moveButton} />
                       </div>
                     </div>
                   )}
@@ -1756,7 +1830,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone/desktop frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
@@ -1847,7 +1921,7 @@ export const ClientDashboard: React.FC = () => {
                     <div className="w-full rounded-[44px] border-[8px] border-neutral-900 bg-neutral-900 shadow-2xl overflow-hidden relative animate-in fade-in duration-200">
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-neutral-900 rounded-b-xl z-20 pointer-events-none" />
                       <div className="h-[560px] overflow-y-auto bg-white rounded-[36px] overflow-x-hidden">
-                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} />
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} onMoveButton={moveButton} />
                       </div>
                     </div>
                   )}
@@ -2478,7 +2552,7 @@ export const ClientDashboard: React.FC = () => {
                 </div>
 
                 {/* Right Area: PREVIEW AO VIVO with live phone/desktop frame */}
-                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-0 self-start ${
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto ${
                   previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
                 }`}>
                   
@@ -2518,7 +2592,7 @@ export const ClientDashboard: React.FC = () => {
                   {previewDevice === 'desktop' ? (
                     <div className="w-full rounded-[26px] border-[3px] border-neutral-900 bg-white shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-200">
                       <div className="h-[560px] overflow-y-auto">
-                        <BioSiteView biosite={previewBiosite} isMockupFrame={false} />
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={false} onMoveButton={moveButton} />
                       </div>
                     </div>
                   ) : (
@@ -2526,7 +2600,7 @@ export const ClientDashboard: React.FC = () => {
                     <div className="w-full rounded-[44px] border-[8px] border-neutral-900 bg-neutral-900 shadow-2xl overflow-hidden relative animate-in fade-in duration-200">
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-neutral-900 rounded-b-xl z-20 pointer-events-none" />
                       <div className="h-[560px] overflow-y-auto bg-white rounded-[36px] overflow-x-hidden">
-                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} />
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} onMoveButton={moveButton} />
                       </div>
                     </div>
                   )}

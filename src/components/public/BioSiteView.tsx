@@ -15,6 +15,8 @@ import {
   Clock, 
   ChevronRight, 
   ChevronLeft, 
+  ChevronUp,
+  ChevronDown,
   Sparkles,
   ExternalLink,
   Navigation,
@@ -22,15 +24,65 @@ import {
   EyeOff,
   Mail,
   Send,
-  Star
+  Star,
+  Calendar,
+  X,
+  Zap
 } from 'lucide-react';
+
+// Standard BACEN Pix EMV payload generator for dynamic / instant QR code
+function generatePixPayload(key: string, name: string, city: string, amount?: number | string): string {
+  const cleanKey = (key || '').trim();
+  const cleanName = (name || 'Beneficiario').normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 25);
+  const cleanCity = (city || 'SAO PAULO').normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 15);
+  
+  const f = (id: string, val: string) => `${id}${String(val.length).padStart(2, '0')}${val}`;
+  
+  const gui = f('00', 'br.gov.bcb.pix');
+  const keyField = f('01', cleanKey);
+  const merchantAccount = f('26', gui + keyField);
+  const mcc = f('52', '0000');
+  const currency = f('53', '986');
+  
+  let amountField = '';
+  if (amount && Number(amount) > 0) {
+    const amtStr = Number(amount).toFixed(2);
+    amountField = f('54', amtStr);
+  }
+  
+  const country = f('58', 'BR');
+  const nameField = f('59', cleanName);
+  const cityField = f('60', cleanCity);
+  const additional = f('62', f('05', '***'));
+  
+  const payloadWithoutCrc = `000201${merchantAccount}${mcc}${currency}${amountField}${country}${nameField}${cityField}${additional}6304`;
+  
+  let crc = 0xFFFF;
+  for (let i = 0; i < payloadWithoutCrc.length; i++) {
+    crc ^= payloadWithoutCrc.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+  const crcHex = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  return `${payloadWithoutCrc}${crcHex}`;
+}
 
 interface BioSiteViewProps {
   biosite: Biosite;
   isMockupFrame?: boolean;
+  onMoveButton?: (index: number, direction: 'up' | 'down') => void;
 }
 
-export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame = false }) => {
+export const BioSiteView: React.FC<BioSiteViewProps> = ({ 
+  biosite, 
+  isMockupFrame = false,
+  onMoveButton 
+}) => {
   const { services, trackEvent, showToast } = useApp();
 
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -41,6 +93,31 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
   const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState<Record<string, number>>({});
+  
+  // Pix Modal state (1 = Form, 2 = QR Code)
+  const [pixModalOpen, setPixModalOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [customerName, setCustomerName] = useState('');
+  const [pixAmount, setPixAmount] = useState('50,00');
+  const [copiedPixCode, setCopiedPixCode] = useState(false);
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    if (!raw) {
+      setPixAmount('');
+      return;
+    }
+    const num = parseInt(raw, 10) / 100;
+    setPixAmount(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  };
+
+  const handleCopyPixCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedPixCode(true);
+    trackEvent(biosite.id, 'pix_copied');
+    showToast('Código Pix copiado!');
+    setTimeout(() => setCopiedPixCode(false), 2500);
+  };
 
   const biositeServices = services.filter(s => s.biositeId === biosite.id && s.active);
 
@@ -133,6 +210,170 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
     biosite.themeConfig.bgColor.toLowerCase() === '#fff' || 
     biosite.themeConfig.bgColor.toLowerCase() === '#f8fafc' || 
     biosite.themeConfig.bgColor.toLowerCase() === '#fafafa';
+
+  // Helper to render icon for any button model
+  const renderButtonIcon = (btn: any) => {
+    const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp' || btn.label?.toLowerCase().includes('whatsapp');
+    const isInsta = btn.icon === 'instagram' || btn.label?.toLowerCase().includes('instagram');
+    const isPix = btn.type === 'Pix' || btn.id === 'btn-pix' || btn.isSpecial === 'pix' || btn.icon === 'QrCode';
+    const isWifi = btn.type === 'WiFi' || btn.id === 'btn-wifi' || btn.isSpecial === 'wifi' || btn.icon === 'Wifi';
+    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking';
+
+    if (isBooking) return <Sparkles className="w-4 h-4 animate-spin-slow" />;
+    if (isPix) return <QrCode className="w-4 h-4" />;
+    if (isWifi) return <Wifi className="w-4 h-4" />;
+    if (isWpp) return <MessageCircle className="w-4 h-4" />;
+    if (isInsta) return <Instagram className="w-4 h-4" />;
+    if (btn.icon === 'phone' || btn.type === 'Ligar') return <Phone className="w-4 h-4" />;
+    if (btn.icon === 'mail' || btn.type === 'Email') return <Mail className="w-4 h-4" />;
+    if (btn.icon === 'Calendar' || btn.type === 'Agendar') return <Calendar className="w-4 h-4" />;
+    if (btn.icon === 'Star' || btn.type === 'Avaliar no Google') return <Star className="w-4 h-4" />;
+    if (btn.icon === 'Send' || btn.type === 'Telegram') return <Send className="w-4 h-4" />;
+    return <Globe className="w-4 h-4" />;
+  };
+
+  const getButtonHref = (btn: any) => {
+    const isSpecial = btn.type === 'Agendar' || btn.type === 'Pix' || btn.type === 'WiFi' || btn.isSpecial;
+    if (isSpecial) return '#';
+    const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp' || btn.label?.toLowerCase().includes('whatsapp');
+    if (isWpp && btn.prefilledMessage) {
+      return `${btn.url || 'https://wa.me/5598991506106'}?text=${encodeURIComponent(btn.prefilledMessage)}`;
+    }
+    return btn.url || '#';
+  };
+
+  const getButtonColors = (btn: any) => {
+    const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp' || btn.label?.toLowerCase().includes('whatsapp');
+    const isInsta = btn.icon === 'instagram' || btn.label?.toLowerCase().includes('instagram');
+    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking';
+    const isPix = btn.type === 'Pix' || btn.id === 'btn-pix' || btn.isSpecial === 'pix';
+    const isWifi = btn.type === 'WiFi' || btn.id === 'btn-wifi' || btn.isSpecial === 'wifi';
+
+    if (btn.bgColor && btn.bgColor !== 'padrão') {
+      const text = (btn.textColor && btn.textColor !== 'padrão') ? btn.textColor : '#ffffff';
+      return { bg: btn.bgColor, text };
+    }
+
+    if (isBooking) {
+      return {
+        bg: biosite.themeConfig.primaryColor,
+        text: biosite.themeConfig.primaryTextColor,
+      };
+    }
+    if (isPix) {
+      const bg = (biosite.pixConfig?.buttonBgColor && biosite.pixConfig.buttonBgColor !== 'padrão') 
+        ? biosite.pixConfig.buttonBgColor 
+        : '#e1306c';
+      const text = (biosite.pixConfig?.buttonTextColor && biosite.pixConfig.buttonTextColor !== 'padrão') 
+        ? biosite.pixConfig.buttonTextColor 
+        : '#ffffff';
+      return { bg, text };
+    }
+    if (isWifi) {
+      const bg = (biosite.wifiConfig?.buttonBgColor && biosite.wifiConfig.buttonBgColor !== 'padrão') 
+        ? biosite.wifiConfig.buttonBgColor 
+        : biosite.themeConfig.cardBg;
+      const text = (biosite.wifiConfig?.buttonTextColor && biosite.wifiConfig.buttonTextColor !== 'padrão') 
+        ? biosite.wifiConfig.buttonTextColor 
+        : biosite.themeConfig.textColor;
+      return { bg, text };
+    }
+    if (isWpp) {
+      return { bg: '#22c55e', text: '#ffffff' };
+    }
+    if (isInsta) {
+      return { bg: '#e1306c', text: '#ffffff' };
+    }
+    return {
+      bg: biosite.themeConfig.cardBg,
+      text: biosite.themeConfig.textColor || '#ffffff',
+    };
+  };
+
+  const handleButtonClick = (btn: any, e: React.MouseEvent) => {
+    trackEvent(biosite.id, 'click_button', btn.id);
+    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking';
+    const isPix = btn.type === 'Pix' || btn.id === 'btn-pix' || btn.isSpecial === 'pix';
+    const isWifi = btn.type === 'WiFi' || btn.id === 'btn-wifi' || btn.isSpecial === 'wifi';
+
+    if (isBooking) {
+      e.preventDefault();
+      handleOpenBooking();
+      return;
+    }
+    if (isPix) {
+      e.preventDefault();
+      setStep(1);
+      setPixModalOpen(true);
+      return;
+    }
+    if (isWifi) {
+      e.preventDefault();
+      handleCopyWifi();
+      return;
+    }
+  };
+
+  // Unified buttons list: always includes special buttons (booking, pix, wifi) if enabled/configured
+  const effectiveButtons = React.useMemo(() => {
+    const list = [...(biosite.contactButtons || [])];
+    const hasBooking = list.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking');
+    const hasPix = list.some(b => b.type === 'Pix' || b.id === 'btn-pix' || (b as any).isSpecial === 'pix');
+    const hasWifi = list.some(b => b.type === 'WiFi' || b.id === 'btn-wifi' || (b as any).isSpecial === 'wifi');
+
+    if (!hasBooking) {
+      list.unshift({
+        id: 'btn-booking',
+        label: 'Agendar Horário Online',
+        icon: 'Sparkles',
+        lucideIcon: 'Sparkles',
+        url: '#agendar',
+        isWhatsApp: false,
+        active: true,
+        type: 'Agendar',
+        isSpecial: 'booking',
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: 'padrão',
+        textColor: 'padrão',
+      });
+    }
+    if (!hasPix && biosite.pixConfig?.pixKey) {
+      list.push({
+        id: 'btn-pix',
+        label: 'Chave Pix',
+        icon: 'QrCode',
+        lucideIcon: 'QrCode',
+        url: '#pix',
+        isWhatsApp: false,
+        active: true,
+        type: 'Pix',
+        isSpecial: 'pix',
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: biosite.pixConfig.buttonBgColor || 'padrão',
+        textColor: biosite.pixConfig.buttonTextColor || 'padrão',
+      });
+    }
+    if (!hasWifi && biosite.wifiConfig?.networkName) {
+      list.push({
+        id: 'btn-wifi',
+        label: `Wi-Fi: ${biosite.wifiConfig.networkName}`,
+        icon: 'Wifi',
+        lucideIcon: 'Wifi',
+        url: '#wifi',
+        isWhatsApp: false,
+        active: true,
+        type: 'WiFi',
+        isSpecial: 'wifi',
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: biosite.wifiConfig.buttonBgColor || 'padrão',
+        textColor: biosite.wifiConfig.buttonTextColor || 'padrão',
+      });
+    }
+    return list;
+  }, [biosite.contactButtons, biosite.pixConfig, biosite.wifiConfig]);
 
   return (
     <div 
@@ -251,25 +492,11 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
           >
             {biosite.description}
           </p>
-
-          {/* Quick Booking Hero CTA Button */}
-          <button
-            onClick={() => handleOpenBooking()}
-            className={`w-full mt-4 py-3.5 px-6 font-bold shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2 text-sm ${getButtonClass()}`}
-            style={{
-              backgroundColor: biosite.themeConfig.primaryColor,
-              color: biosite.themeConfig.primaryTextColor,
-              boxShadow: `0 10px 25px -5px ${biosite.themeConfig.primaryColor}55`,
-            }}
-          >
-            <Sparkles className="w-4 h-4 animate-spin-slow" />
-            Agendar Horário Online
-          </button>
         </div>
 
-        {/* Icon Only Buttons Row (e.g. Instagram round icon) */}
-        {(() => {
-          const iconOnlyButtons = biosite.contactButtons.filter(b => b.active && b.displayMode === 'icon_only');
+        {/* Icon Only Buttons Row (only when not in editor reorder mode) */}
+        {!onMoveButton && (() => {
+          const iconOnlyButtons = effectiveButtons.filter(b => b.active && b.displayMode === 'icon_only');
           if (iconOnlyButtons.length === 0) return null;
           return (
             <div className="flex items-center justify-center gap-3 py-1">
@@ -312,107 +539,81 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
           );
         })()}
 
-        {/* Full Action Buttons (WhatsApp, Instagram, Pix, Links) */}
+        {/* Unified Action Buttons List (WhatsApp, Instagram, Pix, WiFi, Booking, Custom Links) */}
         <div className="space-y-2.5">
-          {biosite.contactButtons.filter(b => b.active && b.displayMode !== 'icon_only').map(btn => {
-            const isWpp = btn.isWhatsApp || btn.icon === 'whatsapp' || btn.label.toLowerCase().includes('whatsapp');
-            const isInsta = btn.icon === 'instagram' || btn.label.toLowerCase().includes('instagram');
-            
-            // Custom or preset color
-            const defaultBg = isWpp 
-              ? '#22c55e' 
-              : isInsta 
-                ? '#e1306c' 
-                : biosite.themeConfig.cardBg;
-            const bg = (btn.bgColor && btn.bgColor !== 'padrão') ? btn.bgColor : defaultBg;
-            const text = (btn.textColor && btn.textColor !== 'padrão') ? btn.textColor : '#ffffff';
+          {effectiveButtons
+            .filter(b => b.active && (onMoveButton ? true : b.displayMode !== 'icon_only'))
+            .map((btn, index, arr) => {
+              const isFirst = index === 0;
+              const isLast = index === arr.length - 1;
+              const colors = getButtonColors(btn);
+              const href = getButtonHref(btn);
 
-            return (
-              <a
-                key={btn.id}
-                href={
-                  isWpp && btn.prefilledMessage 
-                    ? `${btn.url}?text=${encodeURIComponent(btn.prefilledMessage)}` 
-                    : btn.url
-                }
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => trackEvent(biosite.id, 'click_button', btn.id)}
-                className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} ${
-                  btn.pulseEffect ? 'animate-pulse' : ''
-                } hover:brightness-110 active:scale-[0.99]`}
-                style={{
-                  backgroundColor: bg,
-                  color: text,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                }}
-              >
-                <div className="flex items-center gap-2.5">
-                  {isWpp ? (
-                    <MessageCircle className="w-4 h-4" />
-                  ) : isInsta ? (
-                    <Instagram className="w-4 h-4" />
-                  ) : btn.icon === 'phone' ? (
-                    <Phone className="w-4 h-4" />
-                  ) : btn.icon === 'mail' ? (
-                    <Mail className="w-4 h-4" />
-                  ) : (
-                    <Globe className="w-4 h-4" />
+              return (
+                <div key={btn.id} className="relative group">
+                  <a
+                    href={href}
+                    target={href.startsWith('http') ? '_blank' : undefined}
+                    rel={href.startsWith('http') ? 'noreferrer' : undefined}
+                    onClick={(e) => handleButtonClick(btn, e)}
+                    className={`w-full py-3.5 px-4 flex items-center justify-between transition font-bold text-sm border shadow-sm ${getButtonClass()} ${
+                      btn.pulseEffect ? 'animate-pulse' : ''
+                    } hover:brightness-105 active:scale-[0.99] cursor-pointer`}
+                    style={{
+                      backgroundColor: colors.bg,
+                      color: colors.text,
+                      borderColor: 'rgba(255,255,255,0.15)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {renderButtonIcon(btn)}
+                      <span>{btn.label}</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
+                  </a>
+
+                  {/* Hover Quick Reorder Arrows - Unified for ALL buttons */}
+                  {onMoveButton && (
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 backdrop-blur-xs p-1 rounded-lg border border-white/20 shadow-lg pointer-events-auto">
+                      <button
+                        type="button"
+                        disabled={isFirst}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          if (!isFirst) onMoveButton(index, 'up');
+                        }}
+                        className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                          isFirst 
+                            ? 'opacity-25 cursor-not-allowed text-neutral-400' 
+                            : 'text-white hover:bg-white/20 cursor-pointer'
+                        }`}
+                        title={isFirst ? undefined : 'Subir botão'}
+                      >
+                        <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isLast}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          if (!isLast) onMoveButton(index, 'down');
+                        }}
+                        className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                          isLast 
+                            ? 'opacity-25 cursor-not-allowed text-neutral-400' 
+                            : 'text-white hover:bg-white/20 cursor-pointer'
+                        }`}
+                        title={isLast ? undefined : 'Descer botão'}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                    </div>
                   )}
-                  <span>{btn.label}</span>
                 </div>
-                <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
-              </a>
-            );
-          })}
-
-          {/* Quick Pix Button in buttons list if configured */}
-          {biosite.pixConfig?.pixKey && (
-            <button
-              type="button"
-              onClick={handleCopyPix}
-              className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} hover:brightness-110 active:scale-[0.99] cursor-pointer`}
-              style={{
-                backgroundColor: (biosite.pixConfig.buttonBgColor && biosite.pixConfig.buttonBgColor !== 'padrão') 
-                  ? biosite.pixConfig.buttonBgColor 
-                  : '#e1306c',
-                color: (biosite.pixConfig.buttonTextColor && biosite.pixConfig.buttonTextColor !== 'padrão') 
-                  ? biosite.pixConfig.buttonTextColor 
-                  : '#ffffff',
-                borderColor: 'rgba(255,255,255,0.15)',
-              }}
-            >
-              <div className="flex items-center gap-2.5">
-                <QrCode className="w-4 h-4" />
-                <span>Chave Pix</span>
-              </div>
-              <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
-            </button>
-          )}
-
-          {/* WiFi Button in buttons list if configured */}
-          {biosite.wifiConfig?.networkName && (
-            <button
-              type="button"
-              onClick={handleCopyWifi}
-              className={`w-full py-3.5 px-4 flex items-center justify-between transition group font-bold text-sm border shadow-sm ${getButtonClass()} hover:brightness-110 active:scale-[0.99] cursor-pointer`}
-              style={{
-                backgroundColor: (biosite.wifiConfig.buttonBgColor && biosite.wifiConfig.buttonBgColor !== 'padrão') 
-                  ? biosite.wifiConfig.buttonBgColor 
-                  : biosite.themeConfig.cardBg,
-                color: (biosite.wifiConfig.buttonTextColor && biosite.wifiConfig.buttonTextColor !== 'padrão') 
-                  ? biosite.wifiConfig.buttonTextColor 
-                  : biosite.themeConfig.textColor,
-                borderColor: 'rgba(255,255,255,0.15)',
-              }}
-            >
-              <div className="flex items-center gap-2.5">
-                <Wifi className="w-4 h-4" />
-                <span>Wi-Fi: {biosite.wifiConfig.networkName}</span>
-              </div>
-              <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
-            </button>
-          )}
+              );
+            })}
         </div>
 
         {/* SERVICES CATALOG & CAROUSEL */}
@@ -822,6 +1023,162 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({ biosite, isMockupFrame
         isOpen={bookingOpen}
         onClose={() => setBookingOpen(false)}
       />
+
+      {/* Pix Payment Modal (Strict fidelity to reference prints) */}
+      {pixModalOpen && (
+        <div className={`${isMockupFrame ? 'absolute' : 'fixed'} inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150`}>
+          <div className="w-full max-w-[320px] bg-white rounded-2xl p-5 shadow-2xl relative z-50 text-center text-neutral-900 animate-in zoom-in-95 duration-200">
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPixModalOpen(false);
+                setStep(1);
+              }}
+              className="absolute top-3.5 right-3.5 p-1 text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Profile Avatar */}
+            <div className="w-14 h-14 rounded-full border-2 border-white shadow-md mx-auto overflow-hidden mb-2.5 bg-neutral-100">
+              <img 
+                src={biosite.avatarUrl || biosite.coverUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'} 
+                alt={biosite.title} 
+                className="w-full h-full object-cover" 
+              />
+            </div>
+
+            {step === 1 ? (
+              /* ETAPA 1: FORMULÁRIO DE VALOR (Print 1) */
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">
+                  Pagar com Pix
+                </h3>
+                <p className="text-[11px] text-neutral-500 mt-1 leading-snug">
+                  Preencha os dados — o Pix cai direto pra {biosite.pixConfig.beneficiaryName || biosite.title}.
+                </p>
+
+                <div className="text-left mt-4 space-y-1">
+                  <label className="text-xs font-semibold text-neutral-800 block">
+                    Seu nome
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: João Silva"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/70 text-neutral-800 text-xs placeholder:text-neutral-400 focus:outline-none focus:border-[#ff007f] focus:bg-white transition"
+                  />
+                </div>
+
+                <div className="text-left mt-3 space-y-1">
+                  <label className="text-xs font-semibold text-neutral-800 block">
+                    Valor (R$)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="50,00"
+                    value={pixAmount}
+                    onChange={handleAmountChange}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/70 text-neutral-800 text-xs font-semibold placeholder:text-neutral-400 focus:outline-none focus:border-[#ff007f] focus:bg-white transition"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="w-full mt-4 py-3 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
+                  style={{ backgroundColor: biosite.themeConfig.primaryColor || '#ff007f' }}
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Gerar Pix</span>
+                </button>
+              </div>
+            ) : (
+              /* ETAPA 2: QR CODE E CÓDIGO (Print 2) */
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">
+                  Escaneie ou copie
+                </h3>
+                <p className="text-[11px] text-neutral-500 mt-1 leading-snug">
+                  Abra o app do seu banco e leia o QR Code ou cole o código.
+                </p>
+
+                {/* QR Code */}
+                <div className="my-2.5 p-2 rounded-2xl border border-neutral-100 bg-white shadow-2xs inline-block mx-auto">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                      generatePixPayload(
+                        biosite.pixConfig.pixKey,
+                        biosite.pixConfig.beneficiaryName,
+                        biosite.pixConfig.city,
+                        parseFloat((pixAmount || '50,00').replace(/\./g, '').replace(',', '.')) || 50
+                      )
+                    )}`}
+                    alt="QR Code Pix"
+                    className="w-44 h-44 rounded-lg object-contain mx-auto"
+                  />
+                </div>
+
+                {/* Caixa cinza clara com o código Pix Copia e Cola */}
+                <div className="p-2.5 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-600 font-mono text-[9px] leading-tight break-all max-h-16 overflow-y-auto select-all text-left">
+                  {generatePixPayload(
+                    biosite.pixConfig.pixKey,
+                    biosite.pixConfig.beneficiaryName,
+                    biosite.pixConfig.city,
+                    parseFloat((pixAmount || '50,00').replace(/\./g, '').replace(',', '.')) || 50
+                  )}
+                </div>
+
+                {/* Botões lado a lado */}
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 font-semibold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
+                  >
+                    ← Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyPixCode(
+                        generatePixPayload(
+                          biosite.pixConfig.pixKey,
+                          biosite.pixConfig.beneficiaryName,
+                          biosite.pixConfig.city,
+                          parseFloat((pixAmount || '50,00').replace(/\./g, '').replace(',', '.')) || 50
+                        )
+                      )
+                    }
+                    className="flex-1 py-2.5 px-3 rounded-xl font-bold text-white text-xs flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
+                    style={{ backgroundColor: biosite.themeConfig.primaryColor || '#ff007f' }}
+                  >
+                    {copiedPixCode ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Pix</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Rodapé discreto */}
+                <p className="text-[10px] text-neutral-500 mt-2.5 text-center leading-tight">
+                  Após pagar, o valor cai <strong>direto</strong> na conta de {biosite.pixConfig.beneficiaryName || biosite.title}.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
