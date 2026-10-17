@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Biosite, Appointment, AppointmentStatus, Service } from '../../types';
+import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
@@ -257,7 +257,7 @@ export const ClientDashboard: React.FC = () => {
   // State for Catálogo tab (Carrossel & Catálogos)
   const [carouselAutoplay, setCarouselAutoplay] = useState<boolean>(true);
   const [carouselInterval, setCarouselInterval] = useState<number>(5);
-  const [catalogsList, setCatalogsList] = useState<Array<{ id: string; title: string; itemCount: number; active: boolean; isExpanded: boolean }>>(() => {
+  const [catalogsList, setCatalogsList] = useState<CatalogSection[]>(() => {
     try {
       const saved = localStorage.getItem('biosaas_catalogs');
       return saved ? JSON.parse(saved) : [];
@@ -273,12 +273,13 @@ export const ClientDashboard: React.FC = () => {
   }, [catalogsList]);
 
   const handleAddCatalog = () => {
-    const newCat = {
+    const newCat: CatalogSection = {
       id: `cat-${Date.now()}`,
       title: 'Nossos serviços',
       itemCount: 0,
       active: true,
       isExpanded: true,
+      items: [],
     };
     setCatalogsList(prev => [...prev, newCat]);
     setFloatingToast('Catálogo criado');
@@ -304,10 +305,61 @@ export const ClientDashboard: React.FC = () => {
     showToast('Catálogo excluído');
   };
 
-  const handleAddItemToCatalog = (id: string, type: 'image' | 'video' | 'tour') => {
-    setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, itemCount: (c.itemCount || 0) + 1 } : c));
-    const label = type === 'image' ? 'Imagem adicionada' : type === 'video' ? 'Vídeo adicionado' : 'Tour 360º adicionado';
-    showToast(`${label} ao catálogo!`);
+  const handleAddItemToCatalog = (catId: string, type: 'image' | 'video' | 'tour') => {
+    const newItem: CatalogItem = {
+      id: `item-${Date.now()}`,
+      type,
+      imageUrl: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800&auto=format&fit=crop&q=80',
+      active: true,
+      aspectRatio: '16:9',
+      fit: 'cover',
+      title: '',
+      description: '',
+      url: '',
+      buttonText: '',
+      buttonAlign: 'left',
+    };
+
+    setCatalogsList(prev => prev.map(c => {
+      if (c.id !== catId) return c;
+      const currentItems = c.items || [];
+      const updatedItems = [...currentItems, newItem];
+      return {
+        ...c,
+        items: updatedItems,
+        itemCount: updatedItems.length,
+      };
+    }));
+
+    setFloatingToast(type === 'image' ? 'Imagem adicionada' : type === 'video' ? 'Vídeo adicionado' : 'Tour 360º adicionado');
+    setTimeout(() => {
+      setFloatingToast(null);
+    }, 3500);
+  };
+
+  const handleUpdateCatalogItem = (catId: string, itemId: string, updates: Partial<CatalogItem>) => {
+    setCatalogsList(prev => prev.map(c => {
+      if (c.id !== catId) return c;
+      const updatedItems = (c.items || []).map(item => item.id === itemId ? { ...item, ...updates } : item);
+      return {
+        ...c,
+        items: updatedItems,
+        itemCount: updatedItems.length,
+      };
+    }));
+  };
+
+  const handleDeleteCatalogItem = (catId: string, itemId: string) => {
+    setCatalogsList(prev => prev.map(c => {
+      if (c.id !== catId) return c;
+      const updatedItems = (c.items || []).filter(item => item.id !== itemId);
+      return {
+        ...c,
+        items: updatedItems,
+        itemCount: updatedItems.length,
+      };
+    }));
+    showToast('Item excluído');
   };
 
   // Appointments state for the "Agendamentos" tab
@@ -688,6 +740,7 @@ export const ClientDashboard: React.FC = () => {
       buttonTextColor: wifiForm.buttonTextColor,
       enabled: !!wifiForm.networkName,
     },
+    catalogs: catalogsList,
     ...({
       logoShape: appearanceForm.logoShape,
       logoTransparent: appearanceForm.logoTransparent,
@@ -2826,7 +2879,7 @@ export const ClientDashboard: React.FC = () => {
                               <div className="flex items-center gap-3 shrink-0">
                                 {/* Um texto pequeno em cinza alinhado à direita: "0 item(ns)" */}
                                 <span className="text-xs text-neutral-400 font-medium whitespace-nowrap">
-                                  {cat.itemCount || 0} item(ns)
+                                  {(cat.items ? cat.items.length : (cat.itemCount || 0))} item(ns)
                                 </span>
 
                                 {/* Ícone de lixeira (excluir) na extrema direita */}
@@ -2843,45 +2896,210 @@ export const ClientDashboard: React.FC = () => {
 
                             {/* Corpo do Card (Abaixo do cabeçalho) */}
                             {cat.isExpanded && (
-                              <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-6 text-center space-y-4">
-                                {/* Área com borda tracejada ou cinza clara com fundo levemente acinzentado e o texto centralizado */}
-                                <p className="text-xs text-neutral-500 font-normal">
-                                  Nenhum item ainda. Use os botões abaixo pra adicionar imagens ou vídeos.
-                                </p>
+                              (!cat.items || cat.items.length === 0) ? (
+                                <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-6 text-center space-y-4">
+                                  {/* Área com borda tracejada ou cinza clara com fundo levemente acinzentado e o texto centralizado */}
+                                  <p className="text-xs text-neutral-500 font-normal">
+                                    Nenhum item ainda. Use os botões abaixo pra adicionar imagens ou vídeos.
+                                  </p>
 
-                                {/* Rodapé do Card (Botões de ação): Uma linha (flex-row) com 3 botões brancos com borda cinza, lado a lado */}
-                                <div className="flex flex-row items-center justify-center gap-3">
-                                  {/* Botão 1: Ícone de Imagem + texto "Imagem" */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddItemToCatalog(cat.id, 'image')}
-                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
-                                  >
-                                    <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
-                                    <span>Imagem</span>
-                                  </button>
+                                  {/* Rodapé do Card (Botões de ação): Uma linha (flex-row) com 3 botões brancos com borda cinza, lado a lado */}
+                                  <div className="flex flex-row items-center justify-center gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'image')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Imagem</span>
+                                    </button>
 
-                                  {/* Botão 2: Ícone de Câmera/Vídeo + texto "Vídeo" */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddItemToCatalog(cat.id, 'video')}
-                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
-                                  >
-                                    <Video className="w-4 h-4 text-neutral-600 shrink-0" />
-                                    <span>Vídeo</span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'video')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <Video className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Vídeo</span>
+                                    </button>
 
-                                  {/* Botão 3: Ícone de Globo/360 + texto "Tour 360º" */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
-                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
-                                  >
-                                    <Globe className="w-4 h-4 text-neutral-600 shrink-0" />
-                                    <span>Tour 360º</span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <Globe className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Tour 360º</span>
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="space-y-4 pt-1">
+                                  {cat.items.map(item => (
+                                    <div key={item.id} className="space-y-3">
+                                      {/* Top Image Preview matching screenshot 1 & 2 */}
+                                      <div className={`w-full rounded-2xl overflow-hidden border border-neutral-200 bg-neutral-100 ${
+                                        item.aspectRatio === '1:1' ? 'aspect-square' :
+                                        item.aspectRatio === '4:5' ? 'aspect-[4/5]' :
+                                        item.aspectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'
+                                      }`}>
+                                        <img
+                                          src={item.imageUrl}
+                                          alt="Preview da imagem"
+                                          className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
+                                        />
+                                      </div>
+
+                                      {/* Sub-card controls matching screenshot 1 & 2 */}
+                                      <div className="space-y-2.5">
+                                        <div className="flex items-center justify-between gap-2.5">
+                                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                            <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
+                                            <CustomToggle
+                                              size="sm"
+                                              checked={item.active}
+                                              onChange={(val) => handleUpdateCatalogItem(cat.id, item.id, { active: val })}
+                                              title={item.active ? "Desativar imagem" : "Ativar imagem"}
+                                              ariaLabel="Ativar imagem"
+                                            />
+                                            <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                                              <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
+                                              <span>Imagem</span>
+                                            </div>
+                                          </div>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteCatalogItem(cat.id, item.id)}
+                                            className="p-1 text-neutral-400 hover:text-red-500 transition cursor-pointer"
+                                            title="Excluir item"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+
+                                        {/* Proporção e Enquadramento */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <label className="text-[11px] text-neutral-500 font-medium block mb-1">
+                                              Proporção
+                                            </label>
+                                            <select
+                                              value={item.aspectRatio}
+                                              onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { aspectRatio: e.target.value as any })}
+                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                            >
+                                              <option value="16:9">Horizontal 16:9</option>
+                                              <option value="1:1">Quadrada 1:1</option>
+                                              <option value="4:5">Vertical 4:5</option>
+                                              <option value="9:16">Stories 9:16</option>
+                                            </select>
+                                          </div>
+
+                                          <div>
+                                            <label className="text-[11px] text-neutral-500 font-medium block mb-1">
+                                              Enquadramento
+                                            </label>
+                                            <select
+                                              value={item.fit}
+                                              onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { fit: e.target.value as any })}
+                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                            >
+                                              <option value="cover">Preencher (corta)</option>
+                                              <option value="contain">Ajustar (inteira)</option>
+                                            </select>
+                                          </div>
+                                        </div>
+
+                                        {/* Título */}
+                                        <div>
+                                          <input
+                                            type="text"
+                                            placeholder="Título"
+                                            value={item.title}
+                                            onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { title: e.target.value })}
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                          />
+                                        </div>
+
+                                        {/* Texto */}
+                                        <div>
+                                          <textarea
+                                            placeholder="Texto"
+                                            rows={2}
+                                            value={item.description}
+                                            onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { description: e.target.value })}
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 resize-none"
+                                          />
+                                        </div>
+
+                                        {/* Link (opcional) */}
+                                        <div>
+                                          <input
+                                            type="text"
+                                            placeholder="Link (opcional) — vira botão abaixo do banner/v..."
+                                            value={item.url}
+                                            onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { url: e.target.value })}
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                          />
+                                        </div>
+
+                                        {/* Texto do botão e alinhamento (exibido conforme no Print 2) */}
+                                        {(item.url && item.url.trim().length > 0) && (
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <input
+                                              type="text"
+                                              placeholder="Texto do botão (ex: Agendar)"
+                                              value={item.buttonText}
+                                              onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { buttonText: e.target.value })}
+                                              className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                            />
+                                            <select
+                                              value={item.buttonAlign}
+                                              onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { buttonAlign: e.target.value as any })}
+                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                            >
+                                              <option value="left">Esquerda</option>
+                                              <option value="center">Centro</option>
+                                              <option value="right">Direita</option>
+                                            </select>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  {/* Botões de ação abaixo dos itens */}
+                                  <div className="flex flex-row items-center justify-center gap-3 pt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'image')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Imagem</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'video')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <Video className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Vídeo</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
+                                      className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                    >
+                                      <Globe className="w-4 h-4 text-neutral-600 shrink-0" />
+                                      <span>Tour 360º</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )
                             )}
                           </div>
                         ))}

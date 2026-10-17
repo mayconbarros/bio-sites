@@ -111,6 +111,29 @@ export interface Service {
   active: boolean;
 }
 
+export interface CatalogItem {
+  id: string;
+  type: 'image' | 'video' | 'tour';
+  imageUrl: string;
+  active: boolean;
+  aspectRatio: '16:9' | '1:1' | '4:5' | '9:16';
+  fit: 'cover' | 'contain';
+  title: string;
+  description: string;
+  url: string;
+  buttonText: string;
+  buttonAlign: 'left' | 'center' | 'right';
+}
+
+export interface CatalogSection {
+  id: string;
+  title: string;
+  itemCount: number;
+  active: boolean;
+  isExpanded: boolean;
+  items?: CatalogItem[];
+}
+
 export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 export interface Appointment {
@@ -174,6 +197,7 @@ export interface Biosite {
   locationConfig: LocationConfig;
   businessHours: DaySchedule[];
   footerBranding: FooterBranding;
+  catalogs?: CatalogSection[];
   status: 'active' | 'draft' | 'archived';
   createdAt: string;
   updatedAt: string;
