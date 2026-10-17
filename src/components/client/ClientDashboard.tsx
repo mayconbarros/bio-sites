@@ -330,6 +330,56 @@ export const ClientDashboard: React.FC = () => {
     showToast('Catálogo excluído');
   };
 
+  const handleFileUpload = (catId: string, type: 'image' | 'video' | 'tour', file: File) => {
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
+      const newItem: CatalogItem = {
+        id: `item-${Date.now()}`,
+        type,
+        imageUrl: fileUrl,
+        active: true,
+        aspectRatio: '16:9',
+        fit: 'cover',
+        title: '',
+        description: '',
+        url: '',
+        buttonText: '',
+        buttonAlign: 'left',
+      };
+
+      setCatalogsList(prev => prev.map(c => {
+        if (c.id !== catId) return c;
+        const currentItems = c.items || [];
+        const updatedItems = [...currentItems, newItem];
+        return {
+          ...c,
+          items: updatedItems,
+          itemCount: updatedItems.length,
+        };
+      }));
+
+      setFloatingToast(type === 'image' ? 'Imagem adicionada' : type === 'video' ? 'Vídeo adicionado' : 'Tour 360º adicionado');
+      setTimeout(() => {
+        setFloatingToast(null);
+      }, 3500);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleReplaceItemFile = (catId: string, itemId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
+      handleUpdateCatalogItem(catId, itemId, { imageUrl: fileUrl });
+      setFloatingToast('Imagem atualizada');
+      setTimeout(() => {
+        setFloatingToast(null);
+      }, 3500);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddItemToCatalog = (catId: string, type: 'image' | 'video' | 'tour') => {
     const newItem: CatalogItem = {
       id: `item-${Date.now()}`,
@@ -766,6 +816,10 @@ export const ClientDashboard: React.FC = () => {
       enabled: !!wifiForm.networkName,
     },
     catalogs: catalogsList,
+    catalogSettings: {
+      autoplay: carouselAutoplay,
+      interval: carouselInterval,
+    },
     ...({
       logoShape: appearanceForm.logoShape,
       logoTransparent: appearanceForm.logoTransparent,
@@ -2928,11 +2982,46 @@ export const ClientDashboard: React.FC = () => {
                                     Nenhum item ainda. Use os botões abaixo pra adicionar imagens ou vídeos.
                                   </p>
 
-                                  {/* Rodapé do Card (Botões de ação): Uma linha (flex-row) com 3 botões brancos com borda cinza, lado a lado */}
+                                  {/* Inputs invisíveis de arquivo */}
+                                  <input
+                                    type="file"
+                                    id={`upload-image-empty-${cat.id}`}
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'image', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <input
+                                    type="file"
+                                    id={`upload-video-empty-${cat.id}`}
+                                    accept="video/*,image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'video', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <input
+                                    type="file"
+                                    id={`upload-tour-empty-${cat.id}`}
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'tour', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+
+                                  {/* Rodapé do Card (Botões de ação): Gatilhos para o file picker */}
                                   <div className="flex flex-row items-center justify-center gap-3">
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'image')}
+                                      onClick={() => document.getElementById(`upload-image-empty-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
@@ -2941,7 +3030,7 @@ export const ClientDashboard: React.FC = () => {
 
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'video')}
+                                      onClick={() => document.getElementById(`upload-video-empty-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <Video className="w-4 h-4 text-neutral-600 shrink-0" />
@@ -2950,7 +3039,7 @@ export const ClientDashboard: React.FC = () => {
 
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
+                                      onClick={() => document.getElementById(`upload-tour-empty-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <Globe className="w-4 h-4 text-neutral-600 shrink-0" />
@@ -2960,36 +3049,65 @@ export const ClientDashboard: React.FC = () => {
                                 </div>
                               ) : (
                                 <div className="space-y-4 pt-1">
-                                  {cat.items.map(item => (
-                                    <div key={item.id} className="space-y-3">
-                                      {/* Top Image Preview matching screenshot 1 & 2 */}
-                                      <div className={`w-full rounded-2xl overflow-hidden border border-neutral-200 bg-neutral-100 ${
-                                        item.aspectRatio === '1:1' ? 'aspect-square' :
-                                        item.aspectRatio === '4:5' ? 'aspect-[4/5]' :
-                                        item.aspectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'
-                                      }`}>
-                                        <img
-                                          src={item.imageUrl}
-                                          alt="Preview da imagem"
-                                          className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
-                                        />
-                                      </div>
+                                  {/* Layout do Contêiner de Itens (Regra dos 50% - Grid com 2 colunas) */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                    {cat.items.map(item => (
+                                      <div 
+                                        key={item.id} 
+                                        className="bg-white rounded-2xl border border-neutral-200 p-3 space-y-3 shadow-2xs"
+                                      >
+                                        {/* Topo (Preview da Imagem): miniatura com 'CLIQUE PARA TROCAR' centralizado com sombra */}
+                                        <div 
+                                          onClick={() => document.getElementById(`replace-item-${item.id}`)?.click()}
+                                          className="w-full aspect-[16/10] sm:aspect-[16/9] rounded-xl overflow-hidden relative cursor-pointer group bg-neutral-100 border border-neutral-200/80"
+                                          title="Clique para trocar imagem"
+                                        >
+                                          <img
+                                            src={item.imageUrl}
+                                            alt="Preview"
+                                            className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
+                                          />
+                                          <div className="absolute inset-0 bg-black/25 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                            <span className="text-white text-xs sm:text-sm font-extrabold tracking-wider uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] select-none">
+                                              CLIQUE PARA TROCAR
+                                            </span>
+                                          </div>
+                                        </div>
 
-                                      {/* Sub-card controls matching screenshot 1 & 2 */}
-                                      <div className="space-y-2.5">
-                                        <div className="flex items-center justify-between gap-2.5">
+                                        {/* Input invisível para substituir a imagem do item */}
+                                        <input
+                                          type="file"
+                                          id={`replace-item-${item.id}`}
+                                          accept="image/*,video/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleReplaceItemFile(cat.id, item.id, file);
+                                            e.target.value = '';
+                                          }}
+                                        />
+
+                                        {/* Cabeçalho do Card: ícone de arrastar, Toggle padronizado, ícone, texto tipo, lixeira */}
+                                        <div className="flex items-center justify-between gap-2.5 pt-0.5">
                                           <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                             <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
+                                            
                                             <CustomToggle
-                                              size="sm"
                                               checked={item.active}
                                               onChange={(val) => handleUpdateCatalogItem(cat.id, item.id, { active: val })}
-                                              title={item.active ? "Desativar imagem" : "Ativar imagem"}
-                                              ariaLabel="Ativar imagem"
+                                              title={item.active ? "Desativar item" : "Ativar item"}
+                                              ariaLabel="Ativar ou desativar item"
                                             />
+
                                             <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
-                                              <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
-                                              <span>Imagem</span>
+                                              {item.type === 'video' ? (
+                                                <Video className="w-4 h-4 text-neutral-700 shrink-0" />
+                                              ) : item.type === 'tour' ? (
+                                                <Globe className="w-4 h-4 text-neutral-700 shrink-0" />
+                                              ) : (
+                                                <ImageIcon className="w-4 h-4 text-neutral-700 shrink-0" />
+                                              )}
+                                              <span>{item.type === 'video' ? 'Vídeo' : item.type === 'tour' ? 'Tour 360º' : 'Imagem'}</span>
                                             </div>
                                           </div>
 
@@ -3003,16 +3121,16 @@ export const ClientDashboard: React.FC = () => {
                                           </button>
                                         </div>
 
-                                        {/* Proporção e Enquadramento */}
-                                        <div className="grid grid-cols-2 gap-3">
+                                        {/* Linha de Selects (Dropdowns): 50% cada com Proporção e Enquadramento */}
+                                        <div className="grid grid-cols-2 gap-2.5">
                                           <div>
-                                            <label className="text-[11px] text-neutral-500 font-medium block mb-1">
+                                            <label className="text-[11px] text-neutral-600 font-medium block mb-1">
                                               Proporção
                                             </label>
                                             <select
-                                              value={item.aspectRatio}
+                                              value={item.aspectRatio || '16:9'}
                                               onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { aspectRatio: e.target.value as any })}
-                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                              className="w-full px-3 py-1.5 text-xs text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900 cursor-pointer"
                                             >
                                               <option value="16:9">Horizontal 16:9</option>
                                               <option value="1:1">Quadrada 1:1</option>
@@ -3022,13 +3140,13 @@ export const ClientDashboard: React.FC = () => {
                                           </div>
 
                                           <div>
-                                            <label className="text-[11px] text-neutral-500 font-medium block mb-1">
+                                            <label className="text-[11px] text-neutral-600 font-medium block mb-1">
                                               Enquadramento
                                             </label>
                                             <select
-                                              value={item.fit}
+                                              value={item.fit || 'cover'}
                                               onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { fit: e.target.value as any })}
-                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                              className="w-full px-3 py-1.5 text-xs text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900 cursor-pointer"
                                             >
                                               <option value="cover">Preencher (corta)</option>
                                               <option value="contain">Ajustar (inteira)</option>
@@ -3036,69 +3154,96 @@ export const ClientDashboard: React.FC = () => {
                                           </div>
                                         </div>
 
-                                        {/* Título */}
-                                        <div>
+                                        {/* Campos de Texto (Inputs): Título, Texto, Link */}
+                                        <div className="space-y-2 pt-0.5">
                                           <input
                                             type="text"
                                             placeholder="Título"
-                                            value={item.title}
+                                            value={item.title || ''}
                                             onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { title: e.target.value })}
-                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-900 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900"
                                           />
-                                        </div>
 
-                                        {/* Texto */}
-                                        <div>
                                           <textarea
                                             placeholder="Texto"
                                             rows={2}
-                                            value={item.description}
+                                            value={item.description || ''}
                                             onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { description: e.target.value })}
-                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 resize-none"
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-900 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900 resize-none"
                                           />
-                                        </div>
 
-                                        {/* Link (opcional) */}
-                                        <div>
                                           <input
                                             type="text"
                                             placeholder="Link (opcional) — vira botão abaixo do banner/v..."
-                                            value={item.url}
+                                            value={item.url || ''}
                                             onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { url: e.target.value })}
-                                            className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                            className="w-full px-3.5 py-2 text-xs text-neutral-900 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900"
                                           />
-                                        </div>
 
-                                        {/* Texto do botão e alinhamento (exibido conforme no Print 2) */}
-                                        {(item.url && item.url.trim().length > 0) && (
-                                          <div className="grid grid-cols-2 gap-3">
+                                          {/* Nova linha com dois campos dividindo 50% do espaço cada: Texto do botão e Alinhamento */}
+                                          <div className="grid grid-cols-2 gap-2.5 pt-0.5">
                                             <input
                                               type="text"
-                                              placeholder="Texto do botão (ex: Agendar)"
-                                              value={item.buttonText}
+                                              placeholder="Texto do botão (ex: Acessar)"
+                                              value={item.buttonText || ''}
                                               onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { buttonText: e.target.value })}
-                                              className="w-full px-3.5 py-2 text-xs text-neutral-800 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                              className="w-full px-3.5 py-1.5 text-xs text-neutral-900 placeholder:text-neutral-400 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900"
                                             />
                                             <select
-                                              value={item.buttonAlign}
+                                              value={item.buttonAlign || 'left'}
                                               onChange={(e) => handleUpdateCatalogItem(cat.id, item.id, { buttonAlign: e.target.value as any })}
-                                              className="w-full px-3 py-2 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                                              className="w-full px-3 py-1.5 text-xs font-medium text-neutral-800 bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-neutral-900 cursor-pointer"
                                             >
                                               <option value="left">Esquerda</option>
                                               <option value="center">Centro</option>
                                               <option value="right">Direita</option>
                                             </select>
                                           </div>
-                                        )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
+                                    ))}
+                                  </div>
 
-                                  {/* Botões de ação abaixo dos itens */}
+                                  {/* Inputs invisíveis de arquivo para adicionar novos itens */}
+                                  <input
+                                    type="file"
+                                    id={`upload-image-${cat.id}`}
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'image', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <input
+                                    type="file"
+                                    id={`upload-video-${cat.id}`}
+                                    accept="video/*,image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'video', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <input
+                                    type="file"
+                                    id={`upload-tour-${cat.id}`}
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileUpload(cat.id, 'tour', file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+
+                                  {/* Botões de ação abaixo dos itens: Gatilhos para o file picker */}
                                   <div className="flex flex-row items-center justify-center gap-3 pt-2">
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'image')}
+                                      onClick={() => document.getElementById(`upload-image-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
@@ -3107,7 +3252,7 @@ export const ClientDashboard: React.FC = () => {
 
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'video')}
+                                      onClick={() => document.getElementById(`upload-video-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <Video className="w-4 h-4 text-neutral-600 shrink-0" />
@@ -3116,7 +3261,7 @@ export const ClientDashboard: React.FC = () => {
 
                                     <button
                                       type="button"
-                                      onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
+                                      onClick={() => document.getElementById(`upload-tour-${cat.id}`)?.click()}
                                       className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
                                     >
                                       <Globe className="w-4 h-4 text-neutral-600 shrink-0" />

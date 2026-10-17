@@ -198,6 +198,10 @@ export interface Biosite {
   businessHours: DaySchedule[];
   footerBranding: FooterBranding;
   catalogs?: CatalogSection[];
+  catalogSettings?: {
+    autoplay: boolean;
+    interval: number;
+  };
   status: 'active' | 'draft' | 'archived';
   createdAt: string;
   updatedAt: string;

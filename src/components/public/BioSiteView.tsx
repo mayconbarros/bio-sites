@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Biosite, Service } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { BookingModal } from './BookingModal';
+import { CatalogCarousel } from './CatalogCarousel';
 import { 
   MessageCircle, 
   Instagram, 
@@ -615,6 +616,17 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
               );
             })}
         </div>
+
+        {/* CUSTOM BIOSITE CATALOGS (Banners / Fotos / Vídeos / Promoções) */}
+        {biosite.catalogs && biosite.catalogs.filter(c => c.active && c.items && c.items.length > 0).map(catalog => (
+          <div key={catalog.id} className="pt-2">
+            <CatalogCarousel
+              catalog={catalog}
+              autoplay={biosite.catalogSettings?.autoplay ?? true}
+              intervalSeconds={biosite.catalogSettings?.interval ?? 5}
+            />
+          </div>
+        ))}
 
         {/* SERVICES CATALOG & CAROUSEL */}
         <div className="space-y-3 pt-2">
