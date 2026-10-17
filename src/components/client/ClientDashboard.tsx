@@ -2664,10 +2664,10 @@ export const ClientDashboard: React.FC = () => {
           {/* TAB: CATÁLOGO */}
           {selectedTab === 'catalogo' && previewBiosite && (
             <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
-              <div className="flex flex-col xl:flex-row gap-8 items-start">
+              <div className="flex flex-col xl:flex-row items-start gap-8">
                 
-                {/* Coluna da Esquerda (Conteúdo/Formulários): flex-1 min-w-0 space-y-6 */}
-                <div className="flex-1 min-w-0 space-y-6">
+                {/* Coluna da Esquerda (Conteúdo/Formulários): flex-1 w-full space-y-5 */}
+                <div className="flex-1 w-full space-y-5">
                   
                   {/* Card 1 (Carrossel) */}
                   <div className="bg-white rounded-2xl border border-neutral-200 p-6 space-y-4 shadow-2xs">
@@ -2891,8 +2891,10 @@ export const ClientDashboard: React.FC = () => {
 
                 </div>
 
-                {/* Coluna da Direita (Preview/Celular): w-[360px] shrink-0 sticky top-6 self-start */}
-                <div className="w-[360px] shrink-0 sticky top-6 self-start space-y-3 mx-auto xl:mx-0 max-h-[calc(100vh-2rem)] overflow-y-auto">
+                {/* Right Area: PREVIEW AO VIVO with live phone/desktop frame */}
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto ${
+                  previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
+                }`}>
                   
                   {/* Header Row */}
                   <div className="flex items-center justify-between px-1">
