@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+/* Custom Pink Range Slider for Carousel Interval */
+.custom-carousel-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.custom-carousel-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #ff2a85;
+  border: 2px solid #1a1a1a;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s ease;
+}
+
+.custom-carousel-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #ff2a85;
+  border: 2px solid #1a1a1a;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s ease;
+}
+
+.custom-carousel-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.custom-carousel-range::-moz-range-thumb:hover {
+  transform: scale(1.1);
+}

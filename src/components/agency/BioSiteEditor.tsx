@@ -3,6 +3,7 @@ import { Biosite, Service, ThemeConfig } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
+import { CustomToggle } from '../common/CustomToggle';
 import { 
   Palette, 
   Link2, 
@@ -655,18 +656,20 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
                         Permite que clientes copiem a chave em 1 clique ou vejam o QR Code.
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs text-neutral-300 font-medium">
+                        {formData.pixConfig.enabled ? 'Habilitado' : 'Desabilitado'}
+                      </span>
+                      <CustomToggle
                         checked={formData.pixConfig.enabled}
-                        onChange={e => {
-                          const updated = { ...formData.pixConfig, enabled: e.target.checked };
+                        onChange={val => {
+                          const updated = { ...formData.pixConfig, enabled: val };
                           handleFieldChange('pixConfig', updated);
                         }}
-                        className="rounded accent-teal-500"
+                        title={formData.pixConfig.enabled ? "Desativar Pix" : "Habilitar Pix"}
+                        ariaLabel="Habilitar Pix"
                       />
-                      <span>Habilitar Pix</span>
-                    </label>
+                    </div>
                   </div>
 
                   {formData.pixConfig.enabled && (
@@ -746,18 +749,20 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
                         Exibe o cartão de Wi-Fi para clientes que estão no espaço físico.
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs text-neutral-300 font-medium">
+                        {formData.wifiConfig.enabled ? 'Habilitado' : 'Desabilitado'}
+                      </span>
+                      <CustomToggle
                         checked={formData.wifiConfig.enabled}
-                        onChange={e => {
-                          const updated = { ...formData.wifiConfig, enabled: e.target.checked };
+                        onChange={val => {
+                          const updated = { ...formData.wifiConfig, enabled: val };
                           handleFieldChange('wifiConfig', updated);
                         }}
-                        className="rounded accent-blue-500"
+                        title={formData.wifiConfig.enabled ? "Desativar Wi-Fi" : "Habilitar Wi-Fi"}
+                        ariaLabel="Habilitar Wi-Fi"
                       />
-                      <span>Habilitar Wi-Fi</span>
-                    </label>
+                    </div>
                   </div>
 
                   {formData.wifiConfig.enabled && (
@@ -854,19 +859,22 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
                       >
                         <span className="font-semibold text-white w-24">{schedule.dayName}</span>
 
-                        <label className="flex items-center gap-1.5 text-neutral-400">
-                          <input
-                            type="checkbox"
+                        <div className="flex items-center gap-2 text-neutral-400">
+                          <CustomToggle
+                            size="sm"
                             checked={!schedule.closed}
-                            onChange={e => {
+                            onChange={isOpen => {
                               const updated = [...formData.businessHours];
-                              updated[idx] = { ...updated[idx], closed: !e.target.checked };
+                              updated[idx] = { ...updated[idx], closed: !isOpen };
                               handleFieldChange('businessHours', updated);
                             }}
-                            className="rounded accent-emerald-500"
+                            title={schedule.closed ? 'Marcar como aberto' : 'Marcar como fechado'}
+                            ariaLabel={`${schedule.dayName}: ${schedule.closed ? 'Fechado' : 'Aberto'}`}
                           />
-                          <span>{schedule.closed ? 'Fechado' : 'Aberto'}</span>
-                        </label>
+                          <span className={`text-[11px] font-medium ${!schedule.closed ? 'text-white' : 'text-neutral-500'}`}>
+                            {schedule.closed ? 'Fechado' : 'Aberto'}
+                          </span>
+                        </div>
 
                         {!schedule.closed && (
                           <div className="flex items-center gap-2">
@@ -913,18 +921,20 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
                         Divulgue sua marca no rodapé do bio site para atrair novos clientes recorrentes.
                       </p>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs text-neutral-300 font-medium">
+                        {formData.footerBranding.enabled ? 'Exibindo' : 'Oculto'}
+                      </span>
+                      <CustomToggle
                         checked={formData.footerBranding.enabled}
-                        onChange={e => {
-                          const updated = { ...formData.footerBranding, enabled: e.target.checked };
+                        onChange={val => {
+                          const updated = { ...formData.footerBranding, enabled: val };
                           handleFieldChange('footerBranding', updated);
                         }}
-                        className="rounded accent-pink-500"
+                        title={formData.footerBranding.enabled ? "Ocultar rodapé" : "Exibir rodapé"}
+                        ariaLabel="Exibir rodapé da agência"
                       />
-                      <span>Exibir Rodapé</span>
-                    </label>
+                    </div>
                   </div>
 
                   {formData.footerBranding.enabled && (

@@ -4,6 +4,7 @@ import { Biosite, Appointment, AppointmentStatus, Service } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
+import { CustomToggle } from '../common/CustomToggle';
 import confetti from 'canvas-confetti';
 import { 
   BarChart2, 
@@ -63,7 +64,8 @@ import {
   Linkedin,
   Twitter,
   Scissors,
-  Edit3
+  Edit3,
+  Video
 } from 'lucide-react';
 
 const PRESET_BUTTON_COLORS = [
@@ -244,7 +246,7 @@ export const ClientDashboard: React.FC = () => {
     getBiositeStats 
   } = useApp();
 
-  const [selectedTab, setSelectedTab] = useState<string>('estatisticas');
+  const [selectedTab, setSelectedTab] = useState<string>('catalogo');
   const [selectedCategory, setSelectedCategory] = useState<string>('Beleza');
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
   const [datePeriod, setDatePeriod] = useState<'hoje' | 'ontem' | '7d' | '15d' | '30d' | 'maximo'>('30d');
@@ -254,10 +256,59 @@ export const ClientDashboard: React.FC = () => {
 
   // State for Catálogo tab (Carrossel & Catálogos)
   const [carouselAutoplay, setCarouselAutoplay] = useState<boolean>(true);
-  const [carouselInterval, setCarouselInterval] = useState<number>(4);
-  const [catalogsList, setCatalogsList] = useState<Array<{ id: string; title: string; itemCount: number }>>([]);
-  const [newCatalogModalOpen, setNewCatalogModalOpen] = useState<boolean>(false);
-  const [newCatalogTitle, setNewCatalogTitle] = useState<string>('');
+  const [carouselInterval, setCarouselInterval] = useState<number>(5);
+  const [catalogsList, setCatalogsList] = useState<Array<{ id: string; title: string; itemCount: number; active: boolean; isExpanded: boolean }>>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_catalogs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('biosaas_catalogs', JSON.stringify(catalogsList));
+    } catch {}
+  }, [catalogsList]);
+
+  const handleAddCatalog = () => {
+    const newCat = {
+      id: `cat-${Date.now()}`,
+      title: 'Nossos serviços',
+      itemCount: 0,
+      active: true,
+      isExpanded: true,
+    };
+    setCatalogsList(prev => [...prev, newCat]);
+    setFloatingToast('Catálogo criado');
+    setTimeout(() => {
+      setFloatingToast(null);
+    }, 3500);
+  };
+
+  const handleToggleExpandCatalog = (id: string) => {
+    setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, isExpanded: !c.isExpanded } : c));
+  };
+
+  const handleToggleActiveCatalog = (id: string) => {
+    setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, active: !c.active } : c));
+  };
+
+  const handleUpdateCatalogTitle = (id: string, newTitle: string) => {
+    setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c));
+  };
+
+  const handleDeleteCatalog = (id: string) => {
+    setCatalogsList(prev => prev.filter(c => c.id !== id));
+    showToast('Catálogo excluído');
+  };
+
+  const handleAddItemToCatalog = (id: string, type: 'image' | 'video' | 'tour') => {
+    setCatalogsList(prev => prev.map(c => c.id === id ? { ...c, itemCount: (c.itemCount || 0) + 1 } : c));
+    const label = type === 'image' ? 'Imagem adicionada' : type === 'video' ? 'Vídeo adicionado' : 'Tour 360º adicionado';
+    showToast(`${label} ao catálogo!`);
+  };
 
   // Appointments state for the "Agendamentos" tab
   const [dateFilter, setDateFilter] = useState<'today' | 'upcoming' | 'all'>('today');
@@ -1010,7 +1061,22 @@ export const ClientDashboard: React.FC = () => {
         )}
 
         {/* Right Main Content */}
-        <main className="flex-1 p-6 lg:p-8 min-w-0">
+        <main className="flex-1 p-6 lg:p-8 min-w-0 relative">
+          
+          {/* Floating Toast Notification matching Print 2 */}
+          {floatingToast && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#0b1e16] text-white border border-emerald-900/60 px-4 py-2 rounded-2xl flex items-center gap-2.5 text-xs font-semibold shadow-xl animate-in slide-in-from-top-2">
+              <button 
+                type="button" 
+                onClick={() => setFloatingToast(null)} 
+                className="text-neutral-400 hover:text-white p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{floatingToast}</span>
+            </div>
+          )}
           
           {/* TAB: ESTATÍSTICAS (EXACT REFERENCE SCREENSHOT) */}
           {selectedTab === 'estatisticas' && (
@@ -1615,17 +1681,12 @@ export const ClientDashboard: React.FC = () => {
 
                   {/* 3. Logo sem fundo matching screenshot */}
                   <div className="p-3.5 rounded-2xl border border-neutral-200/90 bg-white flex items-center gap-3.5">
-                    <button
-                      type="button"
-                      onClick={() => setAppearanceForm(p => ({ ...p, logoTransparent: !p.logoTransparent }))}
-                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
-                        appearanceForm.logoTransparent ? 'bg-[#ff007f]' : 'bg-neutral-200'
-                      }`}
-                    >
-                      <span className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
-                        appearanceForm.logoTransparent ? 'translate-x-5' : 'translate-x-0.5'
-                      }`} />
-                    </button>
+                    <CustomToggle
+                      checked={appearanceForm.logoTransparent}
+                      onChange={val => setAppearanceForm(p => ({ ...p, logoTransparent: val }))}
+                      title={appearanceForm.logoTransparent ? "Desativar logo sem fundo" : "Ativar logo sem fundo"}
+                      ariaLabel="Logo sem fundo"
+                    />
                     <div>
                       <span className="font-bold text-xs text-neutral-900 block leading-tight">
                         Logo sem fundo
@@ -2043,17 +2104,13 @@ export const ClientDashboard: React.FC = () => {
                                   <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
                                   
                                   {/* Active toggle */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateButton(btn.id, { active: !btn.active })}
-                                    className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
-                                      btn.active ? 'bg-[#ff2a85]' : 'bg-neutral-300'
-                                    }`}
-                                  >
-                                    <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                                      btn.active ? 'translate-x-4' : 'translate-x-0'
-                                    }`} />
-                                  </button>
+                                  <CustomToggle
+                                    size="sm"
+                                    checked={btn.active}
+                                    onChange={val => handleUpdateButton(btn.id, { active: val })}
+                                    title={btn.active ? "Desativar botão" : "Ativar botão"}
+                                    ariaLabel="Ativar ou desativar botão"
+                                  />
 
                                   <span className="text-xs font-bold text-neutral-800 truncate">
                                     {btn.label} • {btn.type || btn.label}
@@ -2245,17 +2302,13 @@ export const ClientDashboard: React.FC = () => {
                                         Chama atenção com uma animação suave.
                                       </span>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateButton(btn.id, { pulseEffect: !btn.pulseEffect })}
-                                      className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
-                                        btn.pulseEffect ? 'bg-[#ff2a85]' : 'bg-neutral-200'
-                                      }`}
-                                    >
-                                      <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                                        btn.pulseEffect ? 'translate-x-4' : 'translate-x-0'
-                                      }`} />
-                                    </button>
+                                    <CustomToggle
+                                      size="sm"
+                                      checked={!!btn.pulseEffect}
+                                      onChange={val => handleUpdateButton(btn.id, { pulseEffect: val })}
+                                      title={btn.pulseEffect ? "Desativar efeito pulsar" : "Ativar efeito pulsar"}
+                                      ariaLabel="Efeito pulsar"
+                                    />
                                   </div>
 
                                 </div>
@@ -2368,20 +2421,15 @@ export const ClientDashboard: React.FC = () => {
                           Ativa um formulário no seu site pra visitante digitar o valor, gerar QR Code e Copia-e-Cola direto pra pagar na sua conta.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPixForm(p => ({ ...p, instantPix: !p.instantPix }));
+                      <CustomToggle
+                        checked={pixForm.instantPix}
+                        onChange={val => {
+                          setPixForm(p => ({ ...p, instantPix: val }));
                           setHasUnsavedButtonChanges(true);
                         }}
-                        className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
-                          pixForm.instantPix ? 'bg-[#ff2a85]' : 'bg-neutral-200'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                          pixForm.instantPix ? 'translate-x-4' : 'translate-x-0'
-                        }`} />
-                      </button>
+                        title={pixForm.instantPix ? "Desativar Pix na hora" : "Ativar Pix na hora"}
+                        ariaLabel="Receber Pix na hora"
+                      />
                     </div>
 
                     {/* Cores do cartão Pix */}
@@ -2399,20 +2447,15 @@ export const ClientDashboard: React.FC = () => {
                             Desligue para deixar transparente (sem card).
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPixForm(p => ({ ...p, hasCardBg: !p.hasCardBg }));
+                        <CustomToggle
+                          checked={pixForm.hasCardBg}
+                          onChange={val => {
+                            setPixForm(p => ({ ...p, hasCardBg: val }));
                             setHasUnsavedButtonChanges(true);
                           }}
-                          className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
-                            pixForm.hasCardBg ? 'bg-[#ff2a85]' : 'bg-neutral-200'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                            pixForm.hasCardBg ? 'translate-x-4' : 'translate-x-0'
-                          }`} />
-                        </button>
+                          title={pixForm.hasCardBg ? "Desativar fundo no cartão" : "Ativar fundo no cartão"}
+                          ariaLabel="Com fundo no cartão Pix"
+                        />
                       </div>
 
                       <ColorPickerField
@@ -2501,20 +2544,15 @@ export const ClientDashboard: React.FC = () => {
                             Desligue para deixar transparente (sem card).
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWifiForm(p => ({ ...p, hasCardBg: !p.hasCardBg }));
+                        <CustomToggle
+                          checked={wifiForm.hasCardBg}
+                          onChange={val => {
+                            setWifiForm(p => ({ ...p, hasCardBg: val }));
                             setHasUnsavedButtonChanges(true);
                           }}
-                          className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
-                            wifiForm.hasCardBg ? 'bg-[#ff2a85]' : 'bg-neutral-200'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                            wifiForm.hasCardBg ? 'translate-x-4' : 'translate-x-0'
-                          }`} />
-                        </button>
+                          title={wifiForm.hasCardBg ? "Desativar fundo no cartão" : "Ativar fundo no cartão"}
+                          ariaLabel="Com fundo no cartão WiFi"
+                        />
                       </div>
 
                       <ColorPickerField
@@ -2632,120 +2670,219 @@ export const ClientDashboard: React.FC = () => {
                 <div className="flex-1 min-w-0 space-y-6">
                   
                   {/* Card 1 (Carrossel) */}
-                  <div className="bg-white rounded-3xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-5">
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 space-y-4 shadow-2xs">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <h3 className="text-base font-extrabold text-neutral-900 tracking-tight">
+                        <h3 className="text-sm font-bold text-neutral-900">
                           Passagem automática
                         </h3>
-                        <p className="text-xs text-neutral-500 mt-0.5 font-medium">
+                        <p className="text-xs text-neutral-500 mt-0.5 font-normal">
                           Os itens trocam sozinhos como um carrossel.
                         </p>
                       </div>
 
                       {/* Toggle Switch */}
-                      <button
-                        type="button"
-                        onClick={() => setCarouselAutoplay(!carouselAutoplay)}
-                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
-                          carouselAutoplay ? 'bg-[#ff2a85]' : 'bg-neutral-200'
-                        }`}
-                      >
-                        <span className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
-                          carouselAutoplay ? 'translate-x-5' : 'translate-x-0.5'
-                        }`} />
-                      </button>
+                      <CustomToggle
+                        checked={carouselAutoplay}
+                        onChange={setCarouselAutoplay}
+                        title={carouselAutoplay ? "Desativar passagem automática" : "Ativar passagem automática"}
+                        ariaLabel="Passagem automática do carrossel"
+                      />
                     </div>
 
-                    {/* Slider: Tempo entre itens [X]s com régua deslizante de 2s a 15s */}
-                    <div className="space-y-2 pt-1">
-                      <div className="flex items-center justify-between text-xs font-bold text-neutral-800">
-                        <span>Tempo entre itens</span>
-                        <span className="font-mono text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded-md text-xs">
-                          {carouselInterval}s
-                        </span>
+                    {/* Slider: Tempo entre itens: 5s */}
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-xs font-bold text-neutral-900 block">
+                        Tempo entre itens: {carouselInterval}s
+                      </span>
+                      
+                      {/* Barra de tempo customizada (track 8px com borda de 1px sólida na área preenchida) */}
+                      <div className="relative py-3 w-full flex items-center select-none">
+                        {/* Linha da barra completa (fundo cinza escuro/preto de 8px - aumentado em 2px) */}
+                        <div className="w-full h-[8px] bg-[#1a1a1a] rounded-full relative overflow-hidden">
+                          {/* Trilha preenchida em rosa vibrante com borda de 1px sólida na cor #1a1a1a */}
+                          <div
+                            className="h-full bg-[#ff2a85] border border-[#1a1a1a] rounded-full transition-all duration-75 box-border"
+                            style={{
+                              width: `calc(10px + ${((carouselInterval - 2) / (15 - 2))} * (100% - 20px))`
+                            }}
+                          />
+                        </div>
+
+                        {/* Bolinha (Thumb): círculo rosa vibrante com borda preta ao redor */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#ff2a85] border-2 border-[#1a1a1a] shadow-xs pointer-events-none transition-all duration-75"
+                          style={{
+                            left: `calc(${((carouselInterval - 2) / (15 - 2))} * (100% - 20px))`
+                          }}
+                        />
+
+                        {/* Input Range invisível para acessibilidade e interação nativa suave */}
+                        <input
+                          type="range"
+                          min={2}
+                          max={15}
+                          step={1}
+                          value={carouselInterval}
+                          onChange={e => setCarouselInterval(Number(e.target.value))}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                          aria-label="Tempo entre itens do carrossel"
+                        />
                       </div>
-                      <input
-                        type="range"
-                        min={2}
-                        max={15}
-                        step={1}
-                        value={carouselInterval}
-                        onChange={e => setCarouselInterval(Number(e.target.value))}
-                        className="w-full accent-[#ff2a85] cursor-pointer"
-                      />
-                      <div className="flex justify-between text-[10px] text-neutral-400 font-medium">
+
+                      <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                         <span>2s</span>
                         <span>15s</span>
                       </div>
                     </div>
 
-                    {/* Ação: Botão verde-limão/amarelo: Salvar configuração do carrossel */}
-                    <div className="pt-2">
+                    {/* Ação: Botão Salvar configuração do carrossel */}
+                    <div className="pt-1">
                       <button
                         type="button"
                         onClick={() => {
                           showToast('Configuração do carrossel salva!', 'success');
                         }}
-                        className="px-5 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 font-black text-xs shadow-xs transition cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-bold text-xs shadow-2xs transition cursor-pointer"
                       >
                         Salvar configuração do carrossel
                       </button>
                     </div>
                   </div>
 
-                  {/* Card 2 (Lista de Catálogos) */}
-                  <div className="bg-white rounded-3xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
-                    {/* Cabeçalho */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100">
+                  {/* Seção Seus catálogos */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between gap-4">
                       <div>
-                        <h3 className="text-base font-extrabold text-neutral-900 tracking-tight">
+                        <h3 className="text-sm font-bold text-neutral-900">
                           Seus catálogos
                         </h3>
-                        <p className="text-xs text-neutral-500 mt-0.5 font-medium">
+                        <p className="text-xs text-neutral-500 mt-0.5 font-normal">
                           Crie quantos quiser (ex: Fotos, Vídeos, Promoções). Arraste para reordenar.
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        onClick={() => setNewCatalogModalOpen(true)}
-                        className="px-4 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 font-black text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer self-start sm:self-auto shrink-0"
+                        onClick={handleAddCatalog}
+                        className="px-4 py-2 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-bold text-xs shadow-2xs transition cursor-pointer shrink-0 flex items-center gap-1"
                       >
-                        <Plus className="w-4 h-4 stroke-[2.5]" />
                         <span>+ Novo catálogo</span>
                       </button>
                     </div>
 
-                    {/* Estado Vazio ou Lista */}
+                    {/* Estado Vazio (Regra 1: se length === 0) */}
                     {catalogsList.length === 0 ? (
-                      <div className="p-12 text-center rounded-2xl border border-neutral-200/80 bg-neutral-50/40">
+                      <div 
+                        onClick={handleAddCatalog}
+                        className="bg-white rounded-2xl border border-neutral-200 py-10 px-6 text-center shadow-2xs cursor-pointer hover:border-neutral-300 transition"
+                      >
                         <p className="text-xs text-neutral-500 font-medium">
-                          Nenhum catálogo criado. Clique em 'Novo catálogo' para começar.
+                          Nenhum catálogo criado. Clique em <span className="underline font-bold text-neutral-800">"Novo catálogo"</span> para começar.
                         </p>
                       </div>
                     ) : (
+                      /* Lista de Cards (Regra 1: se length >= 1) */
                       <div className="space-y-3">
                         {catalogsList.map(cat => (
                           <div 
                             key={cat.id} 
-                            className="p-4 rounded-2xl border border-neutral-200 bg-white flex items-center justify-between gap-3 shadow-2xs hover:border-neutral-300 transition"
+                            className="bg-white rounded-2xl border border-neutral-200 p-4 space-y-3 shadow-2xs"
                           >
-                            <div className="flex items-center gap-3">
-                              <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
-                              <div>
-                                <h4 className="text-xs font-bold text-neutral-900">{cat.title}</h4>
-                                <span className="text-[11px] text-neutral-500 font-medium">{cat.itemCount} itens</span>
+                            {/* Cabeçalho do Card (Linha horizontal com flexbox/alinhamento ao centro) */}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                {/* Ícone de arrastar (drag - 6 pontinhos) na esquerda */}
+                                <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
+                                
+                                {/* Ícone de seta para cima/baixo (chevron) para expandir/recolher */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleExpandCatalog(cat.id)}
+                                  className="p-1 text-neutral-500 hover:text-neutral-800 transition cursor-pointer"
+                                  title={cat.isExpanded ? "Recolher catálogo" : "Expandir catálogo"}
+                                >
+                                  {cat.isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                </button>
+
+                                {/* Um botão Toggle Switch (ativo/rosa por padrão) */}
+                                <CustomToggle
+                                  checked={cat.active}
+                                  onChange={() => handleToggleActiveCatalog(cat.id)}
+                                  title={cat.active ? "Desativar catálogo" : "Ativar catálogo"}
+                                  ariaLabel="Ativar ou desativar catálogo"
+                                />
+
+                                {/* Um campo de input de texto estilizado sem bordas pesadas, com o valor padrão "Nossos serviços" */}
+                                <input
+                                  type="text"
+                                  value={cat.title}
+                                  onChange={e => handleUpdateCatalogTitle(cat.id, e.target.value)}
+                                  className="px-3.5 py-1.5 text-xs font-semibold text-neutral-800 rounded-xl border border-neutral-300 focus:outline-none focus:ring-1 focus:ring-pink-500 bg-white w-full max-w-sm"
+                                  placeholder="Nossos serviços"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-3 shrink-0">
+                                {/* Um texto pequeno em cinza alinhado à direita: "0 item(ns)" */}
+                                <span className="text-xs text-neutral-400 font-medium whitespace-nowrap">
+                                  {cat.itemCount || 0} item(ns)
+                                </span>
+
+                                {/* Ícone de lixeira (excluir) na extrema direita */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCatalog(cat.id)}
+                                  className="p-1 text-neutral-400 hover:text-red-500 transition cursor-pointer"
+                                  title="Excluir catálogo"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setCatalogsList(prev => prev.filter(c => c.id !== cat.id))}
-                              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-500 transition cursor-pointer"
-                              title="Excluir catálogo"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+
+                            {/* Corpo do Card (Abaixo do cabeçalho) */}
+                            {cat.isExpanded && (
+                              <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-6 text-center space-y-4">
+                                {/* Área com borda tracejada ou cinza clara com fundo levemente acinzentado e o texto centralizado */}
+                                <p className="text-xs text-neutral-500 font-normal">
+                                  Nenhum item ainda. Use os botões abaixo pra adicionar imagens ou vídeos.
+                                </p>
+
+                                {/* Rodapé do Card (Botões de ação): Uma linha (flex-row) com 3 botões brancos com borda cinza, lado a lado */}
+                                <div className="flex flex-row items-center justify-center gap-3">
+                                  {/* Botão 1: Ícone de Imagem + texto "Imagem" */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddItemToCatalog(cat.id, 'image')}
+                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                  >
+                                    <ImageIcon className="w-4 h-4 text-neutral-600 shrink-0" />
+                                    <span>Imagem</span>
+                                  </button>
+
+                                  {/* Botão 2: Ícone de Câmera/Vídeo + texto "Vídeo" */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddItemToCatalog(cat.id, 'video')}
+                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                  >
+                                    <Video className="w-4 h-4 text-neutral-600 shrink-0" />
+                                    <span>Vídeo</span>
+                                  </button>
+
+                                  {/* Botão 3: Ícone de Globo/360 + texto "Tour 360º" */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddItemToCatalog(cat.id, 'tour')}
+                                    className="flex-1 py-2 px-3 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+                                  >
+                                    <Globe className="w-4 h-4 text-neutral-600 shrink-0" />
+                                    <span>Tour 360º</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2984,70 +3121,7 @@ export const ClientDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Modal para Novo Catálogo */}
-      {newCatalogModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-neutral-900">
-                Novo Catálogo
-              </h3>
-              <button
-                type="button"
-                onClick={() => setNewCatalogModalOpen(false)}
-                className="text-neutral-400 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newCatalogTitle.trim()) return;
-                setCatalogsList(prev => [
-                  ...prev,
-                  { id: `cat-${Date.now()}`, title: newCatalogTitle.trim(), itemCount: 0 }
-                ]);
-                setNewCatalogTitle('');
-                setNewCatalogModalOpen(false);
-                showToast('Catálogo criado com sucesso!', 'success');
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-xs font-bold text-neutral-700 block mb-1">
-                  Nome do Catálogo *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Fotos dos Trabalhos, Promoções, Cursos"
-                  value={newCatalogTitle}
-                  onChange={e => setNewCatalogTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-neutral-900 text-xs focus:outline-none focus:ring-2 focus:ring-pink-500/20"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setNewCatalogModalOpen(false)}
-                  className="w-1/2 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 text-xs font-black shadow-xs transition"
-                >
-                  Criar Catálogo
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );
