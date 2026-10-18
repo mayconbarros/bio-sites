@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection } from '../../types';
+import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
@@ -331,12 +331,15 @@ export const ClientDashboard: React.FC = () => {
   };
 
   const handleFileUpload = (catId: string, type: 'image' | 'video' | 'tour', file: File) => {
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
+    const isVideo = file.type.startsWith('video/') || type === 'video' || /\.(mp4|webm|mov|ogg|m4v|avi)$/i.test(file.name);
+    const detectedType: 'image' | 'video' | 'tour' = isVideo ? 'video' : (type === 'tour' ? 'tour' : 'image');
+    const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
+
+    const commitItem = (fileUrl: string) => {
       const newItem: CatalogItem = {
         id: `item-${Date.now()}`,
-        type,
+        type: detectedType,
+        mediaType,
         imageUrl: fileUrl,
         active: true,
         aspectRatio: '16:9',
@@ -359,25 +362,56 @@ export const ClientDashboard: React.FC = () => {
         };
       }));
 
-      setFloatingToast(type === 'image' ? 'Imagem adicionada' : type === 'video' ? 'Vídeo adicionado' : 'Tour 360º adicionado');
+      setFloatingToast(isVideo ? 'Vídeo adicionado' : type === 'tour' ? 'Tour 360º adicionado' : 'Imagem adicionada');
       setTimeout(() => {
         setFloatingToast(null);
       }, 3500);
     };
-    reader.readAsDataURL(file);
+
+    if (file.size > 20 * 1024 * 1024) {
+      commitItem(URL.createObjectURL(file));
+    } else {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
+        commitItem(fileUrl);
+      };
+      reader.onerror = () => {
+        commitItem(URL.createObjectURL(file));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleReplaceItemFile = (catId: string, itemId: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
-      handleUpdateCatalogItem(catId, itemId, { imageUrl: fileUrl });
-      setFloatingToast('Imagem atualizada');
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v|avi)$/i.test(file.name);
+    const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
+
+    const commitReplace = (fileUrl: string) => {
+      handleUpdateCatalogItem(catId, itemId, { 
+        imageUrl: fileUrl,
+        mediaType,
+        type: isVideo ? 'video' : 'image'
+      });
+      setFloatingToast(isVideo ? 'Vídeo atualizado' : 'Imagem atualizada');
       setTimeout(() => {
         setFloatingToast(null);
       }, 3500);
     };
-    reader.readAsDataURL(file);
+
+    if (file.size > 20 * 1024 * 1024) {
+      commitReplace(URL.createObjectURL(file));
+    } else {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
+        commitReplace(fileUrl);
+      };
+      reader.onerror = () => {
+        commitReplace(URL.createObjectURL(file));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAddItemToCatalog = (catId: string, type: 'image' | 'video' | 'tour') => {
@@ -3062,11 +3096,24 @@ export const ClientDashboard: React.FC = () => {
                                           className="w-full aspect-[16/10] sm:aspect-[16/9] rounded-xl overflow-hidden relative cursor-pointer group bg-neutral-100 border border-neutral-200/80"
                                           title="Clique para trocar imagem"
                                         >
-                                          <img
-                                            src={item.imageUrl}
-                                            alt="Preview"
-                                            className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
-                                          />
+                                          {isItemVideo(item) ? (
+                                            <video
+                                              key={item.id + '-' + item.imageUrl}
+                                              src={item.imageUrl}
+                                              autoPlay
+                                              muted
+                                              loop
+                                              playsInline
+                                              className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
+                                            />
+                                          ) : (
+                                            <img
+                                              key={item.id + '-' + item.imageUrl}
+                                              src={item.imageUrl}
+                                              alt="Preview"
+                                              className={`w-full h-full ${item.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'}`}
+                                            />
+                                          )}
                                           <div className="absolute inset-0 bg-black/25 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                                             <span className="text-white text-xs sm:text-sm font-extrabold tracking-wider uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] select-none">
                                               CLIQUE PARA TROCAR

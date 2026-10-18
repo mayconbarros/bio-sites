@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CatalogSection, CatalogItem } from '../../types';
+import { CatalogSection, CatalogItem, isItemVideo } from '../../types';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 
 interface CatalogCarouselProps {
@@ -117,7 +117,7 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
 
   return (
     <div 
-      className="bg-white rounded-2xl border border-neutral-200 shadow-xs overflow-hidden select-none transition-all duration-200"
+      className="group relative bg-white rounded-2xl border border-neutral-200 shadow-xs overflow-hidden select-none transition-all duration-200"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -126,15 +126,15 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={() => setIsDragging(false)}
     >
-      {/* Top Cabedal: # CATÁLOGO com setinhas pra cima e pra baixo */}
-      <div className="flex items-center gap-1.5 p-3 pb-2.5">
-        <span className="px-2.5 py-0.5 rounded-md bg-[#ff2a85] text-white text-[10px] font-black tracking-wider uppercase shadow-xs">
+      {/* Top Cabedal: # CATÁLOGO com setinhas pra cima e pra baixo (Oculto por padrão, visível suavemente apenas no hover) */}
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-300">
+        <span className="px-2.5 py-0.5 rounded-md bg-[#ff2a85] text-white text-[10px] font-black tracking-wider uppercase shadow-md">
           # CATÁLOGO
         </span>
         <button
           type="button"
           onClick={handlePrev}
-          className="w-5 h-5 rounded-md bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+          className="w-5 h-5 rounded-md bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white flex items-center justify-center transition cursor-pointer shadow-md"
           title="Slide anterior"
         >
           <ChevronUp className="w-3 h-3 stroke-[3]" />
@@ -142,30 +142,42 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
         <button
           type="button"
           onClick={handleNext}
-          className="w-5 h-5 rounded-md bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+          className="w-5 h-5 rounded-md bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white flex items-center justify-center transition cursor-pointer shadow-md"
           title="Próximo slide"
         >
           <ChevronDown className="w-3 h-3 stroke-[3]" />
         </button>
       </div>
 
-      {/* Image Preview Container */}
-      <div className="px-3">
-        <div className={`w-full rounded-xl overflow-hidden bg-neutral-100 border border-neutral-100 relative ${getAspectClass(currentItem)}`}>
+      {/* 2. Área de Mídia (Topo): Full-bleed colada nas bordas superior, esquerda e direita sem padding/margem */}
+      <div className={`w-full m-0 p-0 relative overflow-hidden ${getAspectClass(currentItem)}`}>
+        {isItemVideo(currentItem) ? (
+          <video
+            key={currentItem.id + '-' + currentItem.imageUrl}
+            src={currentItem.imageUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className={`w-full h-full transition-opacity duration-300 block ${
+              currentItem.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'
+            }`}
+          />
+        ) : (
           <img
-            key={currentItem.id}
+            key={currentItem.id + '-' + currentItem.imageUrl}
             src={currentItem.imageUrl}
             alt={currentItem.title || catalog.title}
-            className={`w-full h-full transition-opacity duration-300 ${
-              currentItem.fit === 'contain' ? 'object-contain bg-black' : 'object-cover'
+            className={`w-full h-full transition-opacity duration-300 block ${
+              currentItem.fit === 'contain' ? 'object-contain bg-neutral-900' : 'object-cover'
             }`}
             draggable={false}
           />
-        </div>
+        )}
       </div>
 
-      {/* Item Body: Título, Texto e Botão Rosa */}
-      <div className="p-3.5 space-y-1.5">
+      {/* 3. Área de Conteúdo (Textos e Botão): Padding aplicado apenas nessa div inferior */}
+      <div className="p-4 space-y-1.5">
         {currentItem.title ? (
           <h4 className="text-sm font-bold text-neutral-900 tracking-tight leading-snug">
             {currentItem.title}
@@ -199,7 +211,7 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
 
       {/* Paginação (dots/pílulas): Visível se houver 2 ou mais itens */}
       {isMultiple && (
-        <div className="flex items-center justify-center gap-1.5 pb-3 pt-0.5">
+        <div className="flex items-center justify-center gap-1.5 pb-3.5 pt-0">
           {activeItems.map((_, idx) => (
             <button
               key={idx}

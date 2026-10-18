@@ -620,6 +620,16 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         {/* CUSTOM BIOSITE CATALOGS (Banners / Fotos / Vídeos / Promoções) */}
         {biosite.catalogs && biosite.catalogs.filter(c => c.active && c.items && c.items.length > 0).map(catalog => (
           <div key={catalog.id} className="pt-2">
+            {/* Nome do catálogo fora e acima do card branco principal */}
+            {catalog.title && (
+              <h3 
+                className="text-sm font-bold tracking-tight mb-2 text-left"
+                style={{ color: isLightBg ? '#171717' : biosite.themeConfig.textColor }}
+              >
+                {catalog.title}
+              </h3>
+            )}
+
             <CatalogCarousel
               catalog={catalog}
               autoplay={biosite.catalogSettings?.autoplay ?? true}

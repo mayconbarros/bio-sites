@@ -123,6 +123,7 @@ export interface CatalogItem {
   url: string;
   buttonText: string;
   buttonAlign: 'left' | 'center' | 'right';
+  mediaType?: 'image' | 'video';
 }
 
 export interface CatalogSection {
@@ -214,3 +215,16 @@ export interface AgencySettings {
   phone: string;
   logoUrl?: string;
 }
+
+export function isItemVideo(item?: { type?: string; mediaType?: string; imageUrl?: string }): boolean {
+  if (!item) return false;
+  if (item.mediaType === 'video' || item.type === 'video') return true;
+  if (typeof item.imageUrl === 'string') {
+    const url = item.imageUrl.toLowerCase();
+    if (url.startsWith('data:video/')) return true;
+    if (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov') || url.endsWith('.ogg')) return true;
+    if (url.includes('video') && !url.includes('images.unsplash.com')) return true;
+  }
+  return false;
+}
+
