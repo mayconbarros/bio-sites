@@ -6,6 +6,7 @@ import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
 import { CustomToggle } from '../common/CustomToggle';
 import { ProfissionaisTab } from './ProfissionaisTab';
+import { AcessoClienteTab } from './AcessoClienteTab';
 import confetti from 'canvas-confetti';
 import { 
   BarChart2, 
@@ -1043,21 +1044,6 @@ export const ClientDashboard: React.FC = () => {
       localStorage.setItem(`biosaas_pixels_${activeBiosite.id}`, JSON.stringify(pixelsForm));
     }
     setFloatingToast('Tags e Pixels salvos com sucesso!');
-    setTimeout(() => setFloatingToast(null), 3000);
-  };
-
-  // Acesso do cliente state
-  const [clientAccessEmail, setClientAccessEmail] = useState(activeBiosite?.clientEmail || 'contato@cliente.com.br');
-  const [clientPassword, setClientPassword] = useState('coonexta123');
-  const [showPassword, setShowPassword] = useState(false);
-
-  const handleSaveClientAccess = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (activeBiosite) {
-      updateBiosite(activeBiosite.id, { clientEmail: clientAccessEmail });
-    }
-    setFloatingToast('Dados de acesso do cliente salvos!');
-    setTimeout(() => setFloatingToast(null), 3000);
   };
 
   const handleAddModel = (model: typeof BUTTON_MODELS[0]) => {
@@ -4488,117 +4474,7 @@ export const ClientDashboard: React.FC = () => {
 
           {/* TAB: ACESSO DO CLIENTE */}
           {selectedTab === 'acesso_cliente' && (
-            <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
-                
-                {/* Header */}
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
-                    <Key className="w-5 h-5 text-neutral-700" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-neutral-900">
-                      Acesso do cliente
-                    </h2>
-                    <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
-                      Credenciais para que o cliente final acesse seu painel de controle e gerencie agendamentos e catálogo.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-2">
-                  
-                  {/* Link do Painel do Cliente */}
-                  <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <span className="text-xs font-bold text-neutral-800 block">Link de login direto</span>
-                      <span className="text-xs text-neutral-500 font-mono">
-                        https://www.coonexta.com.br/painel/{activeBiosite?.slug}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`https://www.coonexta.com.br/painel/${activeBiosite?.slug}`);
-                        setFloatingToast('Link de acesso copiado!');
-                        setTimeout(() => setFloatingToast(null), 2500);
-                      }}
-                      className="px-3.5 py-2 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-center"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar link</span>
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveClientAccess} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      
-                      {/* E-mail de Acesso */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-neutral-800 block">
-                          E-mail de acesso
-                        </label>
-                        <input
-                          type="email"
-                          value={clientAccessEmail}
-                          onChange={(e) => setClientAccessEmail(e.target.value)}
-                          placeholder="cliente@exemplo.com.br"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
-                        />
-                      </div>
-
-                      {/* Senha */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-neutral-800 block">
-                          Senha temporária / Chave de acesso
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            value={clientPassword}
-                            onChange={(e) => setClientPassword(e.target.value)}
-                            placeholder="Digite a senha"
-                            className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer p-1"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const message = encodeURIComponent(`Olá! Seguem seus dados de acesso ao painel Coonexta:\n\n🔗 Link: https://www.coonexta.com.br/painel/${activeBiosite?.slug}\n👤 Login: ${clientAccessEmail}\n🔑 Senha: ${clientPassword}`);
-                          window.open(`https://api.whatsapp.com/send?phone=${encodeURIComponent(activeBiosite?.clientPhone || '')}&text=${message}`, '_blank');
-                        }}
-                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Enviar dados via WhatsApp</span>
-                      </button>
-
-                      <button
-                        type="submit"
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
-                      >
-                        <Check className="w-4 h-4 stroke-[2.5]" />
-                        <span>Salvar Acesso</span>
-                      </button>
-                    </div>
-                  </form>
-
-                </div>
-
-              </div>
-            </div>
+            <AcessoClienteTab />
           )}
 
           {/* TAB: SEJA PARCEIRO */}

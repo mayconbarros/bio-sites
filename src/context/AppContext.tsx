@@ -76,14 +76,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('biosaas_biosites');
     const rawList: Biosite[] = saved ? JSON.parse(saved) : INITIAL_BIOSITES;
     return rawList.map(b => {
-      const existing = b.contactButtons || [];
+      let existing = b.contactButtons || [];
+      const hasAgendar = existing.some(btn => btn.label?.toLowerCase() === 'agendar' || btn.type === 'Agendar' || btn.id === 'btn-agendar');
+      if (!hasAgendar) {
+        existing = [
+          ...existing,
+          {
+            id: 'btn-agendar',
+            label: 'Agendar',
+            icon: 'Calendar',
+            lucideIcon: 'Calendar',
+            url: '#agendar',
+            isWhatsApp: false,
+            active: true,
+            type: 'Agendar',
+            isSpecial: 'booking',
+            displayMode: 'full_button',
+            pulseEffect: false,
+            bgColor: '#ff2a85',
+            textColor: '#ffffff',
+          }
+        ];
+      }
       return { ...b, contactButtons: existing };
     });
   });
 
   const [services, setServices] = useState<Service[]>(() => {
     const saved = localStorage.getItem('biosaas_services');
-    return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+    const parsed = saved ? JSON.parse(saved) : null;
+    return (parsed && parsed.length > 0) ? parsed : INITIAL_SERVICES;
   });
 
   const [professionals, setProfessionals] = useState<Professional[]>(() => {

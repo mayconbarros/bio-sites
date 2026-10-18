@@ -218,9 +218,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
     const isInsta = btn.icon === 'instagram' || btn.label?.toLowerCase().includes('instagram');
     const isPix = btn.type === 'Pix' || btn.id === 'btn-pix' || btn.isSpecial === 'pix' || btn.icon === 'QrCode';
     const isWifi = btn.type === 'WiFi' || btn.id === 'btn-wifi' || btn.isSpecial === 'wifi' || btn.icon === 'Wifi';
-    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking';
+    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking' || (btn.label && btn.label.toLowerCase().includes('agendar'));
 
-    if (isBooking) return <Sparkles className="w-4 h-4 animate-spin-slow" />;
+    if (isBooking) return <Calendar className="w-4 h-4" />;
     if (isPix) return <QrCode className="w-4 h-4" />;
     if (isWifi) return <Wifi className="w-4 h-4" />;
     if (isWpp) return <MessageCircle className="w-4 h-4" />;
@@ -293,7 +293,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
 
   const handleButtonClick = (btn: any, e: React.MouseEvent) => {
     trackEvent(biosite.id, 'click_button', btn.id);
-    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking';
+    const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking' || (btn.label && btn.label.toLowerCase().includes('agendar'));
     const isPix = btn.type === 'Pix' || btn.id === 'btn-pix' || btn.isSpecial === 'pix';
     const isWifi = btn.type === 'WiFi' || btn.id === 'btn-wifi' || btn.isSpecial === 'wifi';
 
@@ -318,16 +318,16 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   // Unified buttons list: always includes special buttons (booking, pix, wifi) if enabled/configured
   const effectiveButtons = React.useMemo(() => {
     const list = [...(biosite.contactButtons || [])];
-    const hasBooking = list.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking');
+    const hasBooking = list.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking' || (b.label && b.label.toLowerCase().includes('agendar')));
     const hasPix = list.some(b => b.type === 'Pix' || b.id === 'btn-pix' || (b as any).isSpecial === 'pix');
     const hasWifi = list.some(b => b.type === 'WiFi' || b.id === 'btn-wifi' || (b as any).isSpecial === 'wifi');
 
     if (!hasBooking) {
-      list.unshift({
+      list.push({
         id: 'btn-booking',
-        label: 'Agendar Horário Online',
-        icon: 'Sparkles',
-        lucideIcon: 'Sparkles',
+        label: 'Agendar',
+        icon: 'Calendar',
+        lucideIcon: 'Calendar',
         url: '#agendar',
         isWhatsApp: false,
         active: true,
@@ -335,8 +335,8 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         isSpecial: 'booking',
         displayMode: 'full_button',
         pulseEffect: false,
-        bgColor: 'padrão',
-        textColor: 'padrão',
+        bgColor: '#ff2a85',
+        textColor: '#ffffff',
       });
     }
     if (!hasPix && biosite.pixConfig?.pixKey) {
