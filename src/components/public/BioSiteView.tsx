@@ -638,402 +638,69 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
           </div>
         ))}
 
-        {/* SERVICES CATALOG & CAROUSEL */}
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold flex items-center gap-2">
-              <Sparkles className="w-4 h-4" style={{ color: biosite.themeConfig.primaryColor }} />
-              Catálogo de Serviços
-            </h2>
-            <span className="text-[11px] text-neutral-400 font-medium">
-              {biositeServices.length} disponíveis
-            </span>
-          </div>
 
-          {/* Category Filter Pills */}
-          {categories.length > 2 && (
-            <div className="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-none text-xs">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-full capitalize whitespace-nowrap font-medium transition ${
-                    selectedCategory === cat
-                      ? 'bg-white text-black font-bold shadow'
-                      : 'bg-black/30 hover:bg-black/50 text-neutral-300'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
 
-          {/* Services List / Cards */}
-          <div className="space-y-3.5">
-            {filteredServices.map(service => {
-              const currentImgIdx = activeImageIndex[service.id] || 0;
-              const hasImages = service.images && service.images.length > 0;
-              const currentImage = hasImages ? service.images[currentImgIdx] : null;
 
-              return (
-                <div 
-                  key={service.id}
-                  className={`overflow-hidden border transition group relative ${getButtonClass()}`}
-                  style={{
-                    backgroundColor: isLightBg ? '#ffffff' : biosite.themeConfig.cardBg,
-                    borderColor: isLightBg ? '#e5e7eb' : `${biosite.themeConfig.primaryColor}25`,
-                    boxShadow: isLightBg ? '0 1px 3px rgba(0,0,0,0.06)' : undefined,
-                  }}
-                >
-                  {/* Photo Carousel Header */}
-                  {hasImages && (
-                    <div className="relative h-40 w-full overflow-hidden bg-black/40">
-                      <img 
-                        src={currentImage!} 
-                        alt={service.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                      />
-                      
-                      {/* Image count pills */}
-                      {service.images.length > 1 && (
-                        <>
-                          <button
-                            onClick={(e) => prevImage(service.id, service.images.length, e)}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-sm transition"
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => nextImage(service.id, service.images.length, e)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/90 text-white backdrop-blur-sm transition"
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                            {service.images.map((_, i) => (
-                              <span 
-                                key={i} 
-                                className={`w-1.5 h-1.5 rounded-full transition-all ${
-                                  i === currentImgIdx ? 'bg-white w-3' : 'bg-white/40'
-                                }`} 
-                              />
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Promo Badge */}
-                      {service.promotionalPrice && (
-                        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-red-600/90 backdrop-blur-sm text-white text-[10px] font-bold tracking-wide uppercase shadow">
-                          Promoção
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Service Details */}
-                  <div className="p-3.5 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className={`font-bold text-sm transition ${isLightBg ? 'text-neutral-900 group-hover:text-pink-600' : 'text-white group-hover:text-pink-300'}`}>
-                          {service.name}
-                        </h3>
-                        <div className={`flex items-center gap-2 text-[11px] mt-0.5 ${isLightBg ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                          <span className="flex items-center gap-1">
-                            <Clock className={`w-3 h-3 ${isLightBg ? 'text-neutral-500' : 'text-neutral-400'}`} />
-                            {service.durationMinutes} min
-                          </span>
-                          <span>•</span>
-                          <span>{service.category}</span>
-                        </div>
-                      </div>
-
-                      {/* Price Tag */}
-                      <div className="text-right">
-                        {service.promotionalPrice ? (
-                          <>
-                            <span className="text-[10px] text-neutral-400 line-through block">
-                              R$ {service.price.toFixed(2).replace('.', ',')}
-                            </span>
-                            <span className={`text-sm font-extrabold ${isLightBg ? 'text-emerald-600' : 'text-emerald-400'}`}>
-                              R$ {service.promotionalPrice.toFixed(2).replace('.', ',')}
-                            </span>
-                          </>
-                        ) : (
-                          <span className={`text-sm font-extrabold ${isLightBg ? 'text-emerald-600' : 'text-emerald-400'}`}>
-                            R$ {service.price.toFixed(2).replace('.', ',')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="text-xs leading-relaxed line-clamp-2" style={{ color: biosite.themeConfig.textMutedColor }}>
-                      {service.description}
-                    </p>
-
-                    {/* Action button inside card */}
-                    <button
-                      onClick={() => handleOpenBooking(service.id)}
-                      className={`w-full py-2 px-3 mt-1 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow ${getButtonClass()}`}
-                      style={{
-                        backgroundColor: biosite.themeConfig.primaryColor,
-                        color: biosite.themeConfig.primaryTextColor,
-                      }}
-                    >
-                      <Clock className="w-3 h-3" />
-                      Agendar este Serviço
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* PIX PAYMENT CARD */}
-        {biosite.pixConfig.enabled && (
-          <div 
-            className={`p-4 border transition relative overflow-hidden ${getButtonClass()}`}
-            style={{
-              backgroundColor: biosite.themeConfig.cardBg,
-              borderColor: `${biosite.themeConfig.primaryColor}30`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center">
-                  <QrCode className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400">
-                    Chave Pix Oficial
-                  </h4>
-                  <p className="text-[11px] text-neutral-400">
-                    {biosite.pixConfig.beneficiaryName}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowQrModal(!showQrModal)}
-                className="text-[11px] font-medium text-teal-400 hover:underline flex items-center gap-1"
-              >
-                {showQrModal ? 'Ocultar QR' : 'Ver QR Code'}
-              </button>
-            </div>
-
-            {/* Pix Key Display & Copy */}
-            <div className="p-2.5 rounded-xl bg-black/40 border border-neutral-800 flex items-center justify-between text-xs mt-2">
-              <span className="font-mono text-neutral-200 select-all truncate pr-2">
-                {biosite.pixConfig.pixKey}
-              </span>
-              <button
-                onClick={handleCopyPix}
-                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold flex items-center gap-1 transition text-xs shrink-0 shadow"
-              >
-                {copiedPix ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    Copiado!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    Copiar
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* QR Code Graphic preview */}
-            {showQrModal && (
-              <div className="mt-3 p-4 rounded-xl bg-white text-black text-center flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
-                <QrCode className="w-28 h-28 text-neutral-900" />
-                <span className="text-xs font-bold mt-1 text-neutral-800">
-                  {biosite.pixConfig.beneficiaryName}
-                </span>
-                <span className="text-[10px] text-neutral-500">
-                  {biosite.pixConfig.city}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* WI-FI CLIENT CARD */}
-        {biosite.wifiConfig.enabled && (
-          <div 
-            className={`p-4 border transition ${getButtonClass()}`}
-            style={{
-              backgroundColor: biosite.themeConfig.cardBg,
-              borderColor: `${biosite.themeConfig.primaryColor}30`,
-            }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                <Wifi className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                  Wi-Fi para Clientes
-                </h4>
-                <p className="text-[11px] text-neutral-400">
-                  Rede: <strong className="text-white">{biosite.wifiConfig.networkName}</strong>
-                </p>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-black/40 border border-neutral-800 flex items-center justify-between text-xs mt-2">
-              <div className="flex items-center gap-2">
-                <span className="text-neutral-400 text-[11px]">Senha:</span>
-                <span className="font-mono text-neutral-200">
-                  {showWifiPassword ? biosite.wifiConfig.password : '••••••••••••'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowWifiPassword(!showWifiPassword)}
-                  className="text-neutral-400 hover:text-white"
-                >
-                  {showWifiPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-              <button
-                onClick={handleCopyWifi}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1 transition text-xs shrink-0 shadow"
-              >
-                {copiedWifi ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    Copiada!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    Copiar Senha
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* LOCATION & GOOGLE MAPS */}
-        {biosite.locationConfig.enabled && (
-          <div 
-            className={`p-4 border transition space-y-3 ${getButtonClass()}`}
-            style={{
-              backgroundColor: biosite.themeConfig.cardBg,
-              borderColor: `${biosite.themeConfig.primaryColor}30`,
-            }}
-          >
-            <div className="flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-red-400">
-                  Onde Estamos
-                </h4>
-                <p className="text-xs text-white font-medium mt-0.5">
-                  {biosite.locationConfig.address}
-                </p>
-                <p className="text-[11px] text-neutral-400">
-                  {biosite.locationConfig.cityState}
-                </p>
-              </div>
+        {biosite.locationConfig?.enabled && biosite.locationConfig?.address && (
+          <div className="w-full space-y-3 bg-transparent">
+            {/* 1. Título (Solto no fundo) */}
+            <div className="flex items-center gap-2 bg-transparent">
+              <MapPin className="w-4 h-4 text-neutral-800 shrink-0" />
+              <span className="text-sm font-bold text-neutral-900">
+                Como chegar
+              </span>
             </div>
 
-            {/* Route buttons */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <a
-                href={biosite.locationConfig.googleMapsUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => trackEvent(biosite.id, 'maps_clicked')}
-                className="py-2.5 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition border border-neutral-700"
-              >
-                <Navigation className="w-3.5 h-3.5 text-blue-400" />
-                Google Maps
-              </a>
-              {biosite.locationConfig.wazeUrl && (
-                <a
-                  href={biosite.locationConfig.wazeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => trackEvent(biosite.id, 'maps_clicked')}
-                  className="py-2.5 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition border border-neutral-700"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
-                  Abrir no Waze
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* BUSINESS HOURS ACCORDION */}
-        <div 
-          className={`p-4 border transition ${getButtonClass()}`}
-          style={{
-            backgroundColor: biosite.themeConfig.cardBg,
-            borderColor: `${biosite.themeConfig.primaryColor}20`,
-          }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-neutral-300">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              Horário de Atendimento
-            </span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-              openStatus.isOpen ? 'bg-emerald-500/20 text-emerald-300' : 'bg-neutral-800 text-neutral-400'
-            }`}>
-              {openStatus.text}
-            </span>
-          </div>
-
-          <div className="space-y-1.5 pt-1 text-xs">
-            {biosite.businessHours.map((schedule) => {
-              const isToday = new Date().getDay() === schedule.dayOfWeek;
-              return (
-                <div 
-                  key={schedule.dayOfWeek}
-                  className={`flex justify-between py-1 px-2 rounded-lg transition ${
-                    isToday ? 'bg-white/10 font-bold text-white' : 'text-neutral-400'
-                  }`}
-                >
-                  <span>{schedule.dayName}:</span>
-                  <span>
-                    {schedule.closed ? 'Fechado' : `${schedule.openTime} às ${schedule.closeTime}`}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* WHITE-LABEL AGENCY BRANDING FOOTER */}
-        {biosite.footerBranding.enabled && (
-          <div className="pt-6 pb-2 text-center text-xs space-y-1 opacity-70 hover:opacity-100 transition">
-            <p className="text-[11px] text-neutral-400">
-              Criado com tecnologia por
+            {/* 2. Texto do Endereço (Solto no fundo) */}
+            <p className="text-xs sm:text-sm text-neutral-700 whitespace-pre-line leading-relaxed font-normal">
+              {biosite.locationConfig.address}
             </p>
-            <a 
-              href={biosite.footerBranding.agencyUrl} 
-              target="_blank" 
+
+            {/* 3. O Mapa (Card com bordas arredondadas, borda cinza clara e overflow hidden) */}
+            <div className="w-full h-48 rounded-xl border border-neutral-200 overflow-hidden bg-neutral-100 shadow-2xs">
+              <iframe
+                title="Google Maps"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(biosite.locationConfig.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                className="w-full h-full border-0"
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+
+            {/* 4. Botão Final (Solto no fundo) */}
+            <a
+              href={`https://maps.google.com/maps?q=${encodeURIComponent(biosite.locationConfig.address)}`}
+              target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 font-bold text-white hover:underline transition"
-              style={{ color: biosite.themeConfig.primaryColor }}
+              onClick={() => trackEvent(biosite.id, 'maps_clicked')}
+              className="w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition shadow-xs hover:opacity-90 active:scale-[0.99] cursor-pointer"
+              style={{
+                backgroundColor: biosite.locationConfig.buttonBgColor || '#10b981',
+                color: biosite.locationConfig.buttonTextColor || '#ffffff',
+              }}
             >
-              <Sparkles className="w-3 h-3" />
-              {biosite.footerBranding.agencyName}
+              <Send className="w-4 h-4" />
+              <span>{biosite.locationConfig.buttonText || 'Como chegar'}</span>
             </a>
-            {biosite.footerBranding.agencyTagline && (
-              <p className="text-[10px] text-neutral-500">
-                {biosite.footerBranding.agencyTagline}
-              </p>
-            )}
           </div>
         )}
+
+
+        {/* RODAPÉ GLOBAL: Feito por MB Web Digital */}
+        <div className="mt-8 pb-4 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
+          <span>Feito por&nbsp;</span>
+          <a
+            href="https://mbwebdigital.com.br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-500 underline hover:text-gray-700 transition"
+          >
+            MB Web Digital
+          </a>
+        </div>
 
       </div>
 

@@ -75,9 +75,14 @@ export interface WifiConfig {
 export interface LocationConfig {
   enabled: boolean;
   address: string;
-  cityState: string;
+  cityState?: string;
   googleMapsUrl: string;
   wazeUrl?: string;
+  buttonText?: string;
+  cardBgColor?: string;
+  cardTextColor?: string;
+  buttonBgColor?: string;
+  buttonTextColor?: string;
 }
 
 export interface DaySchedule {

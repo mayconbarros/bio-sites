@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo } from '../../types';
+import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo, DaySchedule } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
@@ -44,6 +44,8 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Image as ImageIcon,
   Circle,
   Square,
@@ -65,7 +67,13 @@ import {
   Twitter,
   Scissors,
   Edit3,
-  Video
+  Video,
+  Lightbulb,
+  Navigation,
+  CalendarDays,
+  Target,
+  Key,
+  Gift
 } from 'lucide-react';
 
 const PRESET_BUTTON_COLORS = [
@@ -226,6 +234,38 @@ const ColorPickerField: React.FC<ColorPickerFieldProps> = ({
           </div>
         </>
       )}
+    </div>
+  );
+};
+
+const AddressColorPicker: React.FC<{
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+}> = ({ label, value, onChange }) => {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-neutral-700 block">
+        {label}
+      </label>
+      <div className="relative flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white hover:border-neutral-300 transition shadow-2xs group cursor-pointer">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-7 h-7 rounded-lg border border-black/10 shadow-inner shrink-0"
+            style={{ backgroundColor: value || '#ffffff' }}
+          />
+          <span className="text-xs font-mono font-medium text-neutral-800 uppercase tracking-wide">
+            {value || '#FFFFFF'}
+          </span>
+        </div>
+        <input
+          type="color"
+          value={value && value.startsWith('#') ? value : '#000000'}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          aria-label={label}
+        />
+      </div>
     </div>
   );
 };
@@ -711,6 +751,314 @@ export const ClientDashboard: React.FC = () => {
     buttonTextColor: activeBiosite?.wifiConfig?.buttonTextColor || 'padrão',
   });
 
+  // Endereço (Location) form state
+  const [addressForm, setAddressForm] = useState({
+    address: activeBiosite?.locationConfig?.address || '',
+    buttonText: activeBiosite?.locationConfig?.buttonText || 'Como chegar',
+    cardBgColor: activeBiosite?.locationConfig?.cardBgColor || '#ffffff',
+    cardTextColor: activeBiosite?.locationConfig?.cardTextColor || '#171717',
+    buttonBgColor: activeBiosite?.locationConfig?.buttonBgColor || '#10b981',
+    buttonTextColor: activeBiosite?.locationConfig?.buttonTextColor || '#ffffff',
+    enabled: activeBiosite?.locationConfig?.enabled ?? !!activeBiosite?.locationConfig?.address,
+  });
+
+  useEffect(() => {
+    if (activeBiosite?.locationConfig) {
+      setAddressForm({
+        address: activeBiosite.locationConfig.address || '',
+        buttonText: activeBiosite.locationConfig.buttonText || 'Como chegar',
+        cardBgColor: activeBiosite.locationConfig.cardBgColor || '#ffffff',
+        cardTextColor: activeBiosite.locationConfig.cardTextColor || '#171717',
+        buttonBgColor: activeBiosite.locationConfig.buttonBgColor || '#10b981',
+        buttonTextColor: activeBiosite.locationConfig.buttonTextColor || '#ffffff',
+        enabled: activeBiosite.locationConfig.enabled ?? !!activeBiosite.locationConfig.address,
+      });
+    }
+  }, [activeBiosite?.id]);
+
+  const handleSaveAddress = () => {
+    if (!activeBiosite) return;
+    const trimmed = addressForm.address.trim();
+    const mapsUrl = trimmed
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`
+      : '';
+    const newLocationConfig = {
+      ...activeBiosite.locationConfig,
+      address: trimmed,
+      buttonText: addressForm.buttonText.trim() || 'Como chegar',
+      cardBgColor: addressForm.cardBgColor,
+      cardTextColor: addressForm.cardTextColor,
+      buttonBgColor: addressForm.buttonBgColor,
+      buttonTextColor: addressForm.buttonTextColor,
+      googleMapsUrl: mapsUrl,
+      enabled: !!trimmed,
+    };
+    setAddressForm(prev => ({ ...prev, enabled: !!trimmed }));
+    updateBiosite(activeBiosite.id, { locationConfig: newLocationConfig });
+    showToast('Endereço salvo com sucesso!', 'success');
+    setFloatingToast('Endereço salvo com sucesso!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  const handleTestMaps = () => {
+    const trimmed = addressForm.address.trim();
+    if (!trimmed) {
+      showToast('Digite um endereço antes de testar no Google Maps.', 'error');
+      return;
+    }
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleRemoveAddress = () => {
+    if (!activeBiosite) return;
+    const newLocationConfig = {
+      ...activeBiosite.locationConfig,
+      address: '',
+      enabled: false,
+    };
+    setAddressForm(prev => ({
+      ...prev,
+      address: '',
+      enabled: false,
+    }));
+    updateBiosite(activeBiosite.id, { locationConfig: newLocationConfig });
+    showToast('Endereço removido!');
+    setFloatingToast('Endereço removido');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  // Serviços tab state & handlers
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceDuration, setNewServiceDuration] = useState('30');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editServiceName, setEditServiceName] = useState('');
+  const [editServiceDuration, setEditServiceDuration] = useState('');
+  const [editServicePrice, setEditServicePrice] = useState('');
+
+  const handleAddService = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!activeBiosite) return;
+    if (!newServiceName.trim()) {
+      showToast('Digite o nome do serviço', 'error');
+      return;
+    }
+    const duration = parseInt(newServiceDuration, 10) || 30;
+    const price = parseFloat(newServicePrice.replace(',', '.')) || 0;
+
+    addService({
+      biositeId: activeBiosite.id,
+      name: newServiceName.trim(),
+      description: '',
+      category: 'Geral',
+      durationMinutes: duration,
+      price: price,
+      images: [],
+      orderIndex: siteServices.length,
+      active: true,
+    });
+
+    setNewServiceName('');
+    setNewServiceDuration('30');
+    setNewServicePrice('');
+    setFloatingToast('Serviço adicionado com sucesso!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  const handleStartEditService = (svc: Service) => {
+    setEditingServiceId(svc.id);
+    setEditServiceName(svc.name);
+    setEditServiceDuration(String(svc.durationMinutes));
+    setEditServicePrice(String(svc.price));
+  };
+
+  const handleSaveEditService = (id: string) => {
+    if (!editServiceName.trim()) {
+      showToast('Digite o nome do serviço', 'error');
+      return;
+    }
+    const duration = parseInt(editServiceDuration, 10) || 30;
+    const price = parseFloat(editServicePrice.replace(',', '.')) || 0;
+
+    updateService(id, {
+      name: editServiceName.trim(),
+      durationMinutes: duration,
+      price: price,
+    });
+
+    setEditingServiceId(null);
+    setFloatingToast('Serviço atualizado com sucesso!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  const handleDeleteService = (id: string) => {
+    deleteService(id);
+    setFloatingToast('Serviço removido com sucesso!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  // Disponibilidade calendar & slots state (matching the 3 prints)
+  const [calYear, setCalYear] = useState(2026);
+  const [calMonth, setCalMonth] = useState(7); // 7 = agosto (0-indexed)
+  const [selectedDay, setSelectedDay] = useState(3); // 03 de Agosto por padrão
+  const ALL_TIME_SLOTS = [
+    '06:00', '07:00',
+    '08:00', '09:00',
+    '10:00', '11:00',
+    '12:00', '13:00',
+    '14:00', '15:00',
+    '16:00', '17:00',
+    '18:00', '19:00',
+    '20:00', '21:00',
+  ];
+
+  const [blockedDays, setBlockedDays] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_blocked_days');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      '2026-08-02': true,
+      '2026-08-09': true,
+      '2026-08-16': true,
+      '2026-08-23': true,
+      '2026-08-30': true,
+    };
+  });
+
+  const [dayOpenSlots, setDayOpenSlots] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_day_slots');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      '2026-08-03': ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'],
+      '2026-08-01': [],
+    };
+  });
+
+  const currentDateKey = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+  const isCurrentDayBlocked = !!blockedDays[currentDateKey];
+
+  const handleToggleBlockCurrentDay = () => {
+    const willBlock = !isCurrentDayBlocked;
+    setBlockedDays(prev => {
+      const next = { ...prev, [currentDateKey]: willBlock };
+      localStorage.setItem('biosaas_blocked_days', JSON.stringify(next));
+      return next;
+    });
+    setFloatingToast(willBlock ? 'Dia bloqueado' : 'Dia desbloqueado');
+    setTimeout(() => setFloatingToast(null), 2500);
+  };
+
+  const handleToggleSlot = (slot: string) => {
+    const currentSlots = isCurrentDayBlocked
+      ? []
+      : (dayOpenSlots[currentDateKey] ?? ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']);
+    const isActive = currentSlots.includes(slot);
+    const updated = isActive ? currentSlots.filter(s => s !== slot) : [...currentSlots, slot];
+
+    if (isCurrentDayBlocked) {
+      setBlockedDays(prev => {
+        const next = { ...prev, [currentDateKey]: false };
+        localStorage.setItem('biosaas_blocked_days', JSON.stringify(next));
+        return next;
+      });
+    }
+
+    setDayOpenSlots(prev => {
+      const next = { ...prev, [currentDateKey]: updated };
+      localStorage.setItem('biosaas_day_slots', JSON.stringify(next));
+      return next;
+    });
+
+    setFloatingToast('Horário atualizado');
+    setTimeout(() => setFloatingToast(null), 2000);
+  };
+
+  const getSelectedDateTitle = () => {
+    const d = new Date(calYear, calMonth, selectedDay);
+    const dayNames = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const dayName = dayNames[d.getDay()];
+    const dayNum = String(selectedDay).padStart(2, '0');
+    const monthName = monthNames[calMonth];
+    return `${dayName}, ${dayNum} De ${monthName}`;
+  };
+
+  const getCalendarDays = () => {
+    const firstDayIndex = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(calYear, calMonth, 0).getDate();
+    const days: { day: number; isCurrentMonth: boolean; dateKey: string }[] = [];
+
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const d = daysInPrevMonth - i;
+      const prevMonthIdx = calMonth === 0 ? 11 : calMonth - 1;
+      const prevYear = calMonth === 0 ? calYear - 1 : calYear;
+      days.push({
+        day: d,
+        isCurrentMonth: false,
+        dateKey: `${prevYear}-${String(prevMonthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      });
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: true,
+        dateKey: `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+      });
+    }
+
+    const remaining = (7 - (days.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+      const nextMonthIdx = calMonth === 11 ? 0 : calMonth + 1;
+      const nextYear = calMonth === 11 ? calYear + 1 : calYear;
+      days.push({
+        day: i,
+        isCurrentMonth: false,
+        dateKey: `${nextYear}-${String(nextMonthIdx + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+      });
+    }
+
+    return days;
+  };
+
+  // Pixels state
+  const [pixelsForm, setPixelsForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`biosaas_pixels_${activeBiosite?.id}`);
+      return saved ? JSON.parse(saved) : { metaPixel: '', ga4: '', gtm: '', tiktok: '' };
+    } catch {
+      return { metaPixel: '', ga4: '', gtm: '', tiktok: '' };
+    }
+  });
+
+  const handleSavePixels = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (activeBiosite) {
+      localStorage.setItem(`biosaas_pixels_${activeBiosite.id}`, JSON.stringify(pixelsForm));
+    }
+    setFloatingToast('Tags e Pixels salvos com sucesso!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
+  // Acesso do cliente state
+  const [clientAccessEmail, setClientAccessEmail] = useState(activeBiosite?.clientEmail || 'contato@cliente.com.br');
+  const [clientPassword, setClientPassword] = useState('coonexta123');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSaveClientAccess = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (activeBiosite) {
+      updateBiosite(activeBiosite.id, { clientEmail: clientAccessEmail });
+    }
+    setFloatingToast('Dados de acesso do cliente salvos!');
+    setTimeout(() => setFloatingToast(null), 3000);
+  };
+
   const handleAddModel = (model: typeof BUTTON_MODELS[0]) => {
     const newId = `btn-${Date.now()}`;
     const newBtn = {
@@ -848,6 +1196,19 @@ export const ClientDashboard: React.FC = () => {
       buttonBgColor: wifiForm.buttonBgColor,
       buttonTextColor: wifiForm.buttonTextColor,
       enabled: !!wifiForm.networkName,
+    },
+    locationConfig: {
+      ...activeBiosite.locationConfig,
+      address: addressForm.address,
+      buttonText: addressForm.buttonText || 'Como chegar',
+      cardBgColor: addressForm.cardBgColor,
+      cardTextColor: addressForm.cardTextColor,
+      buttonBgColor: addressForm.buttonBgColor,
+      buttonTextColor: addressForm.buttonTextColor,
+      googleMapsUrl: addressForm.address.trim()
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressForm.address.trim())}`
+        : '',
+      enabled: (addressForm.enabled || !!addressForm.address.trim()) && !!addressForm.address.trim(),
     },
     catalogs: catalogsList,
     catalogSettings: {
@@ -1073,6 +1434,25 @@ export const ClientDashboard: React.FC = () => {
       items: [
         { id: 'servicos', label: 'Serviços', icon: Clock },
         { id: 'profissionais', label: 'Profissionais', icon: UserCheck },
+        { id: 'disponibilidade', label: 'Disponibilidade', icon: CalendarDays },
+      ],
+    },
+    {
+      title: 'Integrações',
+      items: [
+        { id: 'pixels', label: 'Pixels & Rastreio', icon: Target },
+      ],
+    },
+    {
+      title: 'Configurações',
+      items: [
+        { id: 'acesso_cliente', label: 'Acesso do cliente', icon: Key },
+      ],
+    },
+    {
+      title: 'Parceria',
+      items: [
+        { id: 'seja_parceiro', label: 'Seja Parceiro', icon: Gift },
       ],
     },
   ];
@@ -1193,7 +1573,7 @@ export const ClientDashboard: React.FC = () => {
         
         {/* Left Sidebar inside the Panel matching screenshot */}
         {!sidebarCollapsed && (
-          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 min-h-[calc(100vh-92px)]">
+          <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 h-[calc(100vh-92px)] overflow-y-auto">
             <div className="space-y-6">
               {NAV_SECTIONS.map((sec, secIdx) => (
                 <div key={secIdx}>
@@ -1754,13 +2134,16 @@ export const ClientDashboard: React.FC = () => {
                           {activeBiosite.title}
                         </h3>
 
-                        <div className="mt-6 mb-2 flex items-center justify-center gap-1.5 text-xs text-neutral-600 font-medium select-none">
-                          <div className="w-4 h-4 rounded-full bg-neutral-900 flex items-center justify-center text-white text-[9px] shrink-0">
-                            <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-                              <path d="M12 3v18c-1.2 0-2.4-.6-3.1-1.6L5.4 15H3c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2h2.4l3.5-4.4c.7-1 1.9-1.6 3.1-1.6zm4.5 4.5c1.8 1.8 2.8 4.2 2.8 6.5s-1 4.7-2.8 6.5l-1.4-1.4c1.4-1.4 2.2-3.3 2.2-5.1s-.8-3.7-2.2-5.1l1.4-1.4zm3.5-3.5c2.7 2.7 4.2 6.3 4.2 9.9s-1.5 7.2-4.2 9.9l-1.4-1.4c2.3-2.3 3.6-5.4 3.6-8.5s-1.3-6.2-3.6-8.5l1.4-1.4z" />
-                            </svg>
-                          </div>
-                          <span>Feito por Vision Local</span>
+                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
+                          <span>Feito por&nbsp;</span>
+                          <a
+                            href="https://mbwebdigital.com.br"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 underline hover:text-gray-700 transition"
+                          >
+                            MB Web Digital
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -2144,14 +2527,17 @@ export const ClientDashboard: React.FC = () => {
                           {previewBiosite.title}
                         </h3>
 
-                        {/* Watermark: Feito por Vision Local */}
-                        <div className="mt-6 mb-2 flex items-center justify-center gap-1.5 text-xs text-neutral-600 font-medium select-none">
-                          <div className="w-4 h-4 rounded-full bg-neutral-900 flex items-center justify-center text-white text-[9px] shrink-0">
-                            <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-                              <path d="M12 3v18c-1.2 0-2.4-.6-3.1-1.6L5.4 15H3c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2h2.4l3.5-4.4c.7-1 1.9-1.6 3.1-1.6zm4.5 4.5c1.8 1.8 2.8 4.2 2.8 6.5s-1 4.7-2.8 6.5l-1.4-1.4c1.4-1.4 2.2-3.3 2.2-5.1s-.8-3.7-2.2-5.1l1.4-1.4zm3.5-3.5c2.7 2.7 4.2 6.3 4.2 9.9s-1.5 7.2-4.2 9.9l-1.4-1.4c2.3-2.3 3.6-5.4 3.6-8.5s-1.3-6.2-3.6-8.5l1.4-1.4z" />
-                            </svg>
-                          </div>
-                          <span>Feito por Vision Local</span>
+                        {/* Rodapé: Feito por MB Web Digital */}
+                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
+                          <span>Feito por&nbsp;</span>
+                          <a
+                            href="https://mbwebdigital.com.br"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 underline hover:text-gray-700 transition"
+                          >
+                            MB Web Digital
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -3388,8 +3774,917 @@ export const ClientDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* TAB: ENDEREÇO */}
+          {selectedTab === 'endereco' && previewBiosite && (
+            <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col xl:flex-row items-start gap-8">
+                
+                {/* Coluna da Esquerda (Conteúdo/Formulários): flex-1 w-full space-y-5 */}
+                <div className="flex-1 w-full space-y-5">
+
+                  {/* Card Principal: Como chegar */}
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 space-y-5 shadow-2xs">
+                    
+                    {/* Cabeçalho */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin className="w-5 h-5 text-neutral-700" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-neutral-900">
+                          Como chegar
+                        </h3>
+                        <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
+                          Digite o endereço da sua empresa. No mini-site aparece um botão que abre o Google Maps já traçando a rota até você.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Campo de Endereço */}
+                    <div className="space-y-1.5 pt-1">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Endereço completo
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={addressForm.address}
+                        onChange={(e) => setAddressForm(prev => ({ ...prev, address: e.target.value }))}
+                        placeholder="Ex: Av. Paulista, 1500 - Bela Vista, São Paulo - SP, 01310-200"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition resize-none leading-relaxed"
+                      />
+                      <p className="text-xs text-neutral-400">
+                        Dica: quanto mais completo (rua, número, cidade, estado), mais preciso o Google Maps abre.
+                      </p>
+                    </div>
+
+                    {/* Campo do Botão */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Texto do botão
+                      </label>
+                      <input
+                        type="text"
+                        value={addressForm.buttonText}
+                        onChange={(e) => setAddressForm(prev => ({ ...prev, buttonText: e.target.value }))}
+                        placeholder="Como chegar"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                    </div>
+
+                    {/* Seletores de Cor (Grid 2 colunas) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <AddressColorPicker
+                        label="Cor de fundo do bloco"
+                        value={addressForm.cardBgColor}
+                        onChange={(val) => setAddressForm(prev => ({ ...prev, cardBgColor: val }))}
+                      />
+                      <AddressColorPicker
+                        label="Cor do texto"
+                        value={addressForm.cardTextColor}
+                        onChange={(val) => setAddressForm(prev => ({ ...prev, cardTextColor: val }))}
+                      />
+                      <AddressColorPicker
+                        label="Cor do botão"
+                        value={addressForm.buttonBgColor}
+                        onChange={(val) => setAddressForm(prev => ({ ...prev, buttonBgColor: val }))}
+                      />
+                      <AddressColorPicker
+                        label="Cor do texto do botão"
+                        value={addressForm.buttonTextColor}
+                        onChange={(val) => setAddressForm(prev => ({ ...prev, buttonTextColor: val }))}
+                      />
+                    </div>
+
+                    {/* Botões de Ação (Linha) */}
+                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-neutral-100">
+                      <button
+                        type="button"
+                        onClick={handleSaveAddress}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#a3e635] hover:bg-[#92d324] text-neutral-950 transition shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        Salvar endereço
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleTestMaps}
+                        className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-300 transition shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-neutral-500" />
+                        Testar no Google Maps
+                      </button>
+
+                      {addressForm.address && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveAddress}
+                          className="ml-auto text-red-600 hover:text-red-700 flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer hover:underline py-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                          Remover endereço
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Rodapé de Dica */}
+                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3 mt-2">
+                      <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-amber-950">
+                          Como funciona:
+                        </h4>
+                        <p className="text-xs text-amber-900/80 leading-relaxed font-normal">
+                          Ao clicar no botão no seu mini-site, o visitante será direcionado diretamente para o aplicativo ou site do Google Maps com a rota já calculada a partir da localização atual dele.
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+
+                {/* Coluna da Direita (Preview ao Vivo - Smartphone / Desktop) */}
+                <div className={`w-full transition-all duration-300 shrink-0 space-y-3 mx-auto xl:mx-0 sticky top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto ${
+                  previewDevice === 'desktop' ? 'xl:w-[440px] 2xl:w-[480px]' : 'xl:w-[320px] 2xl:w-[340px]'
+                }`}>
+                  
+                  {/* Header Row */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-black text-neutral-800 tracking-wider uppercase">
+                      PREVIEW AO VIVO
+                    </span>
+
+                    <div className="flex items-center gap-1 p-0.5 rounded-full bg-neutral-200/60 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDevice('mobile')}
+                        className={`px-3 py-1 rounded-full text-xs transition cursor-pointer flex items-center gap-1 ${
+                          previewDevice === 'mobile'
+                            ? 'bg-[#ff007f] text-white font-bold shadow-xs'
+                            : 'text-neutral-600 hover:text-neutral-900 font-semibold'
+                        }`}
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>Mobile</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDevice('desktop')}
+                        className={`px-3 py-1 rounded-full text-xs transition cursor-pointer flex items-center gap-1 ${
+                          previewDevice === 'desktop'
+                            ? 'bg-[#ff007f] text-white font-bold shadow-xs'
+                            : 'text-neutral-600 hover:text-neutral-900 font-semibold'
+                        }`}
+                      >
+                        <Monitor className="w-3 h-3" />
+                        <span>Desktop</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Desktop Preview vs Smartphone Frame Mockup */}
+                  {previewDevice === 'desktop' ? (
+                    <div className="w-full rounded-[26px] border-[3px] border-neutral-900 bg-white shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-200">
+                      <div className="h-[560px] overflow-y-auto">
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={false} onMoveButton={moveButton} />
+                      </div>
+                    </div>
+                  ) : (
+                    /* SMARTPHONE FRAME WITH NOTCH */
+                    <div className="w-full rounded-[44px] border-[8px] border-neutral-900 bg-neutral-900 shadow-2xl overflow-hidden relative animate-in fade-in duration-200">
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-4 bg-neutral-900 rounded-b-xl z-20 pointer-events-none" />
+                      <div className="h-[560px] overflow-y-auto bg-white rounded-[36px] overflow-x-hidden">
+                        <BioSiteView biosite={previewBiosite} isMockupFrame={true} onMoveButton={moveButton} />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SERVIÇOS (SEM MOCKUP DE PREVIEW, LARGURA TOTAL) */}
+          {selectedTab === 'servicos' && (
+            <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
+                
+                {/* Cabeçalho */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock className="w-5 h-5 text-neutral-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-neutral-900">
+                      Serviços
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
+                      Cadastre e gerencie os serviços exibidos no seu mini-site. Defina o nome, tempo estimado e o valor de cada procedimento.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Formulário de Adicionar Serviço (Inputs em Linha + Botão Verde +) */}
+                <form onSubmit={handleAddService} className="pt-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                    
+                    {/* Nome do serviço */}
+                    <div className="flex-1 space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Nome do serviço
+                      </label>
+                      <input
+                        type="text"
+                        value={newServiceName}
+                        onChange={(e) => setNewServiceName(e.target.value)}
+                        placeholder="Ex: Corte Masculino, Design de Sobrancelha..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                    </div>
+
+                    {/* Duração (minutos) */}
+                    <div className="w-full sm:w-40 space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Duração (minutos)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        step="5"
+                        value={newServiceDuration}
+                        onChange={(e) => setNewServiceDuration(e.target.value)}
+                        placeholder="Ex: 30"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                    </div>
+
+                    {/* Preço (R$) */}
+                    <div className="w-full sm:w-40 space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Preço (R$)
+                      </label>
+                      <input
+                        type="text"
+                        value={newServicePrice}
+                        onChange={(e) => setNewServicePrice(e.target.value)}
+                        placeholder="Ex: 50,00"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                    </div>
+
+                    {/* Botão Verde com Ícone + */}
+                    <div className="sm:self-end">
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto h-[42px] px-4 rounded-xl bg-[#10b981] hover:bg-[#059669] text-white flex items-center justify-center gap-1.5 font-bold transition shadow-xs cursor-pointer active:scale-95"
+                        title="Adicionar Serviço"
+                      >
+                        <Plus className="w-5 h-5 stroke-[2.5]" />
+                        <span className="sm:hidden text-xs">Adicionar Serviço</span>
+                      </button>
+                    </div>
+
+                  </div>
+                </form>
+
+                {/* Lista de Serviços ou Empty State */}
+                <div className="pt-4 border-t border-neutral-100">
+                  {siteServices.length === 0 ? (
+                    /* Estado Vazio (Print 1) */
+                    <div className="py-12 px-4 text-center rounded-2xl border-2 border-dashed border-neutral-200/80 bg-neutral-50/50 flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 mb-3">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-bold text-neutral-800 mb-1">
+                        Nenhum serviço cadastrado ainda
+                      </h4>
+                      <p className="text-xs text-neutral-500 max-w-md">
+                        Preencha os campos acima com o nome, duração e preço do procedimento e clique no botão verde com o sinal de mais (+) para cadastrar seu primeiro serviço.
+                      </p>
+                    </div>
+                  ) : (
+                    /* Lista com Serviços (Print 2) */
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                          Serviços cadastrados ({siteServices.length})
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {siteServices.map(svc => {
+                          const isEditing = editingServiceId === svc.id;
+
+                          if (isEditing) {
+                            return (
+                              <div 
+                                key={svc.id}
+                                className="p-3.5 sm:p-4 rounded-xl border-2 border-[#10b981] bg-emerald-50/20 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition"
+                              >
+                                <input
+                                  type="text"
+                                  value={editServiceName}
+                                  onChange={(e) => setEditServiceName(e.target.value)}
+                                  placeholder="Nome do serviço"
+                                  className="flex-1 px-3 py-1.5 rounded-lg border border-neutral-200 text-xs bg-white text-neutral-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#10b981]/20"
+                                />
+                                <div className="w-full sm:w-32">
+                                  <input
+                                    type="number"
+                                    value={editServiceDuration}
+                                    onChange={(e) => setEditServiceDuration(e.target.value)}
+                                    placeholder="Duração (min)"
+                                    className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 text-xs bg-white text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20"
+                                  />
+                                </div>
+                                <div className="w-full sm:w-32">
+                                  <input
+                                    type="text"
+                                    value={editServicePrice}
+                                    onChange={(e) => setEditServicePrice(e.target.value)}
+                                    placeholder="Preço (R$)"
+                                    className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 text-xs bg-white text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <button
+                                    onClick={() => handleSaveEditService(svc.id)}
+                                    className="px-3 py-1.5 rounded-lg bg-[#10b981] hover:bg-[#059669] text-white text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Salvar
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingServiceId(null)}
+                                    className="p-1.5 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-neutral-700 text-xs transition cursor-pointer"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={svc.id}
+                              className="p-4 rounded-xl border border-neutral-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-neutral-300 hover:shadow-xs transition"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-sm font-bold text-neutral-900">
+                                    {svc.name}
+                                  </h4>
+                                  {!svc.active && (
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-500">
+                                      Inativo
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2.5 text-xs text-neutral-500">
+                                  <span className="flex items-center gap-1 font-medium">
+                                    <Clock className="w-3.5 h-3.5 text-neutral-400" />
+                                    {svc.durationMinutes} min
+                                  </span>
+                                  <span className="text-neutral-300">•</span>
+                                  <span className="font-bold text-neutral-800">
+                                    R$ {Number(svc.price).toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 self-end sm:self-center">
+                                <CustomToggle
+                                  checked={svc.active}
+                                  onChange={(checked) => {
+                                    updateService(svc.id, { active: checked });
+                                    setFloatingToast(checked ? 'Serviço ativado!' : 'Serviço desativado!');
+                                    setTimeout(() => setFloatingToast(null), 2500);
+                                  }}
+                                  title={svc.active ? "Desativar serviço" : "Ativar serviço"}
+                                  ariaLabel={`Ativar ou desativar ${svc.name}`}
+                                />
+                                <button
+                                  onClick={() => handleStartEditService(svc)}
+                                  className="p-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900 transition cursor-pointer"
+                                  title="Editar serviço"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteService(svc.id)}
+                                  className="p-2 rounded-lg bg-neutral-100 hover:bg-red-50 text-neutral-400 hover:text-red-600 transition cursor-pointer"
+                                  title="Excluir serviço"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: DISPONIBILIDADE (EXACT REPLICA OF THE 3 PRINTS) */}
+          {selectedTab === 'disponibilidade' && (
+            <div className="w-full max-w-7xl mx-auto space-y-4 animate-in fade-in duration-200">
+              
+              {/* Aviso Superior */}
+              <div className="bg-neutral-50/90 border border-neutral-200/80 rounded-2xl px-5 py-3.5 flex items-center gap-2.5 text-xs text-neutral-700 shadow-2xs">
+                <span className="text-base select-none shrink-0">💡</span>
+                <span>
+                  <strong className="font-bold text-neutral-800">Não precisa republicar o site.</strong> Todo horário que você abre ou fecha aqui já vale no ato pro cliente. Cada mudança salva sozinha e mostra um "✓" no canto.
+                </span>
+              </div>
+
+              {/* Grid 2 Colunas */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                
+                {/* Coluna Esquerda: Calendário (Ajustes por data) */}
+                <div className="lg:col-span-5 bg-white rounded-2xl border border-neutral-200 p-5 sm:p-6 space-y-4 shadow-2xs">
+                  <h3 className="text-sm font-bold text-neutral-900">
+                    Ajustes por data
+                  </h3>
+
+                  {/* Navegador de Mês */}
+                  <div className="flex items-center justify-between px-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (calMonth === 0) {
+                          setCalMonth(11);
+                          setCalYear(prev => prev - 1);
+                        } else {
+                          setCalMonth(prev => prev - 1);
+                        }
+                      }}
+                      className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-neutral-800 capitalize select-none">
+                      {['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][calMonth]} {calYear}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (calMonth === 11) {
+                          setCalMonth(0);
+                          setCalYear(prev => prev + 1);
+                        } else {
+                          setCalMonth(prev => prev + 1);
+                        }
+                      }}
+                      className="p-1 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Dias da Semana */}
+                  <div className="grid grid-cols-7 text-center text-xs text-neutral-400 font-medium py-1">
+                    {['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'].map(d => (
+                      <span key={d} className="select-none">{d}</span>
+                    ))}
+                  </div>
+
+                  {/* Grid de Dias */}
+                  <div className="grid grid-cols-7 gap-1 text-center">
+                    {getCalendarDays().map((item, idx) => {
+                      if (!item.isCurrentMonth) {
+                        return (
+                          <div
+                            key={idx}
+                            className="h-9 flex items-center justify-center text-xs text-neutral-300 font-normal select-none"
+                          >
+                            {item.day}
+                          </div>
+                        );
+                      }
+
+                      const isSelected = item.day === selectedDay;
+                      const isBlocked = !!blockedDays[item.dateKey];
+
+                      let dayClass = "text-neutral-800 hover:bg-neutral-100 font-medium cursor-pointer";
+                      if (isSelected) {
+                        dayClass = "bg-[#ff2a85] text-white font-bold shadow-xs cursor-pointer";
+                      } else if (isBlocked) {
+                        dayClass = "bg-[#ffe4e6]/60 text-neutral-700 cursor-pointer";
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedDay(item.day)}
+                          className={`h-9 rounded-lg flex items-center justify-center text-xs transition ${dayClass}`}
+                        >
+                          <span className={isBlocked ? "line-through" : ""}>
+                            {item.day}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Rodapé Informativo */}
+                  <p className="text-[11px] text-neutral-500 pt-1 select-none">
+                    Dias <span className="line-through font-semibold text-neutral-700">riscados</span> estão bloqueados.
+                  </p>
+                </div>
+
+                {/* Coluna Direita: Horários do Dia */}
+                <div className="lg:col-span-7 bg-white rounded-2xl border border-neutral-200 p-5 sm:p-6 space-y-4 shadow-2xs">
+                  <div>
+                    <h3 className="text-sm font-bold text-neutral-900">
+                      {getSelectedDateTitle()}
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Ligue ou desligue cada horário deste dia. Verde = aberto, cinza = fechado.
+                    </p>
+                  </div>
+
+                  {/* Botão Bloquear / Desbloquear Dia Inteiro (Exato aos Prints 1, 2 e 3) */}
+                  {!isCurrentDayBlocked ? (
+                    /* Prints 1 e 2: Dia não bloqueado */
+                    <button
+                      type="button"
+                      onClick={handleToggleBlockCurrentDay}
+                      className="w-full py-2.5 px-4 rounded-xl border border-neutral-200 hover:bg-neutral-50 flex items-center justify-center gap-2 text-xs font-semibold text-neutral-800 transition cursor-pointer active:scale-[0.99]"
+                    >
+                      <span className="text-sm select-none">🚫</span>
+                      <span>Bloquear o dia inteiro</span>
+                    </button>
+                  ) : (
+                    /* Print 3: Dia bloqueado */
+                    <div className="w-full p-2.5 sm:p-3 rounded-xl border border-rose-200 bg-white flex items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-neutral-800">
+                        <span className="text-sm select-none">🚫</span>
+                        <span>Dia inteiro bloqueado</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleToggleBlockCurrentDay}
+                        className="px-4 py-2 rounded-xl bg-[#e11d48] hover:bg-[#be123c] text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                      >
+                        Desbloquear dia
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Grid de Horários em 2 Colunas */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    {ALL_TIME_SLOTS.map(slot => {
+                      const currentSlots = isCurrentDayBlocked
+                        ? []
+                        : (dayOpenSlots[currentDateKey] ?? ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']);
+                      const isOpen = currentSlots.includes(slot);
+
+                      if (isOpen && !isCurrentDayBlocked) {
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => handleToggleSlot(slot)}
+                            className="px-3.5 py-2.5 rounded-xl border border-[#fbcfe8] bg-[#fdf2f8] flex items-center justify-between text-xs font-bold text-neutral-800 hover:border-pink-300 transition cursor-pointer"
+                          >
+                            <span>{slot}</span>
+                            <span className="w-3 h-3 rounded-full bg-[#ec4899] shrink-0" />
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => handleToggleSlot(slot)}
+                          className="px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/70 flex items-center justify-between text-xs text-neutral-400 hover:bg-neutral-100 transition cursor-pointer"
+                        >
+                          <span className="line-through">{slot}</span>
+                          <span className="w-3 h-3 rounded-full bg-neutral-300 shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: PIXELS & RASTREIO */}
+          {selectedTab === 'pixels' && (
+            <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
+                
+                {/* Header */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <Target className="w-5 h-5 text-neutral-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-neutral-900">
+                      Pixels & Rastreio
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
+                      Conecte ferramentas de análise e rastreamento para acompanhar as conversões dos seus anúncios no Meta, Google e TikTok.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSavePixels} className="space-y-4 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Meta / Facebook Pixel */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Meta (Facebook) Pixel ID
+                      </label>
+                      <input
+                        type="text"
+                        value={pixelsForm.metaPixel}
+                        onChange={(e) => setPixelsForm({ ...pixelsForm, metaPixel: e.target.value })}
+                        placeholder="Ex: 1234567890123456"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                      <p className="text-[11px] text-neutral-400">Rastreia visualizações de página, cliques nos botões e agendamentos.</p>
+                    </div>
+
+                    {/* Google Analytics 4 */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Google Analytics 4 (GA4 ID)
+                      </label>
+                      <input
+                        type="text"
+                        value={pixelsForm.ga4}
+                        onChange={(e) => setPixelsForm({ ...pixelsForm, ga4: e.target.value })}
+                        placeholder="Ex: G-XXXXXXXXXX"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                      <p className="text-[11px] text-neutral-400">ID de métrica do Google Analytics (começa com 'G-').</p>
+                    </div>
+
+                    {/* Google Tag Manager */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        Google Tag Manager (GTM ID)
+                      </label>
+                      <input
+                        type="text"
+                        value={pixelsForm.gtm}
+                        onChange={(e) => setPixelsForm({ ...pixelsForm, gtm: e.target.value })}
+                        placeholder="Ex: GTM-XXXXXXX"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                      <p className="text-[11px] text-neutral-400">ID do contêiner do GTM para disparo de scripts personalizados.</p>
+                    </div>
+
+                    {/* TikTok Pixel */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-neutral-800 block">
+                        TikTok Pixel ID
+                      </label>
+                      <input
+                        type="text"
+                        value={pixelsForm.tiktok}
+                        onChange={(e) => setPixelsForm({ ...pixelsForm, tiktok: e.target.value })}
+                        placeholder="Ex: C1234567890ABCDEF"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                      />
+                      <p className="text-[11px] text-neutral-400">Identificador do pixel do TikTok Ads Manager.</p>
+                    </div>
+
+                  </div>
+
+                  <div className="pt-3 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                    >
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Salvar Configurações de Rastreio</span>
+                    </button>
+                  </div>
+                </form>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ACESSO DO CLIENTE */}
+          {selectedTab === 'acesso_cliente' && (
+            <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
+                
+                {/* Header */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <Key className="w-5 h-5 text-neutral-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-neutral-900">
+                      Acesso do cliente
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
+                      Credenciais para que o cliente final acesse seu painel de controle e gerencie agendamentos e catálogo.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  
+                  {/* Link do Painel do Cliente */}
+                  <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-bold text-neutral-800 block">Link de login direto</span>
+                      <span className="text-xs text-neutral-500 font-mono">
+                        https://www.coonexta.com.br/painel/{activeBiosite?.slug}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://www.coonexta.com.br/painel/${activeBiosite?.slug}`);
+                        setFloatingToast('Link de acesso copiado!');
+                        setTimeout(() => setFloatingToast(null), 2500);
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-center"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar link</span>
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveClientAccess} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* E-mail de Acesso */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-neutral-800 block">
+                          E-mail de acesso
+                        </label>
+                        <input
+                          type="email"
+                          value={clientAccessEmail}
+                          onChange={(e) => setClientAccessEmail(e.target.value)}
+                          placeholder="cliente@exemplo.com.br"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition"
+                        />
+                      </div>
+
+                      {/* Senha */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-neutral-800 block">
+                          Senha temporária / Chave de acesso
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            value={clientPassword}
+                            onChange={(e) => setClientPassword(e.target.value)}
+                            placeholder="Digite a senha"
+                            className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer p-1"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const message = encodeURIComponent(`Olá! Seguem seus dados de acesso ao painel Coonexta:\n\n🔗 Link: https://www.coonexta.com.br/painel/${activeBiosite?.slug}\n👤 Login: ${clientAccessEmail}\n🔑 Senha: ${clientPassword}`);
+                          window.open(`https://api.whatsapp.com/send?phone=${encodeURIComponent(activeBiosite?.clientPhone || '')}&text=${message}`, '_blank');
+                        }}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar dados via WhatsApp</span>
+                      </button>
+
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                      >
+                        <Check className="w-4 h-4 stroke-[2.5]" />
+                        <span>Salvar Acesso</span>
+                      </button>
+                    </div>
+                  </form>
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SEJA PARCEIRO */}
+          {selectedTab === 'seja_parceiro' && (
+            <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl border border-neutral-200 p-6 sm:p-7 shadow-2xs space-y-6">
+                
+                {/* Header */}
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <Gift className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-neutral-900">
+                      Programa Seja Parceiro Coonexta
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
+                      Indique outros profissionais e estabelecimentos e ganhe comissões mensais recorrentes para cada cliente ativo.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Destaque das Vantagens */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 space-y-1">
+                    <span className="text-2xl font-black text-rose-600">30%</span>
+                    <h4 className="text-xs font-bold text-neutral-900">Comissão Recorrente</h4>
+                    <p className="text-[11px] text-neutral-500">Receba todos os meses enquanto sua indicação mantiver o plano ativo.</p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 space-y-1">
+                    <span className="text-2xl font-black text-emerald-600">Pix</span>
+                    <h4 className="text-xs font-bold text-neutral-900">Pagamento Automático</h4>
+                    <p className="text-[11px] text-neutral-500">Transferência direta na sua chave Pix cadastrada todo dia 10.</p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 space-y-1">
+                    <span className="text-2xl font-black text-neutral-900">100%</span>
+                    <h4 className="text-xs font-bold text-neutral-900">Apoio & Material</h4>
+                    <p className="text-[11px] text-neutral-500">Artes prontas, modelos demonstrativos e suporte dedicado da equipe.</p>
+                  </div>
+                </div>
+
+                {/* Link de Indicação */}
+                <div className="p-5 rounded-2xl bg-neutral-900 text-white space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Seu link exclusivo de indicação</h4>
+                      <p className="text-xs text-neutral-400 mt-0.5">Compartilhe com amigos, clientes e nas redes sociais:</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://www.coonexta.com.br/r/${activeBiosite?.slug || 'parceiro'}`);
+                        setFloatingToast('Link de parceiro copiado!');
+                        setTimeout(() => setFloatingToast(null), 2500);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-center"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar link de parceiro</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-neutral-800 text-xs font-mono text-emerald-400 select-all break-all">
+                    https://www.coonexta.com.br/r/{activeBiosite?.slug || 'parceiro'}
+                  </div>
+                </div>
+
+                {/* CTA WhatsApp */}
+                <div className="pt-2 flex justify-start">
+                  <button
+                    type="button"
+                    onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20o%20Programa%20de%20Parceiros%20Coonexta', '_blank')}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-xs cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Falar com o time de parcerias</span>
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* EDITING TABS: Re-uses BioSiteEditor smoothly */}
-          {(['titulos', 'endereco', 'leads', 'layout', 'links', 'profissionais', 'pix', 'cadastros'].includes(selectedTab)) && (
+          {(['titulos', 'leads', 'layout', 'links', 'profissionais', 'pix', 'cadastros'].includes(selectedTab)) && (
             <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-neutral-200 p-6 shadow-2xs animate-in fade-in duration-200">
               <BioSiteEditor 
                 biosite={activeBiosite} 

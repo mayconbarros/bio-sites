@@ -166,7 +166,7 @@ export const INITIAL_BIOSITES: Biosite[] = [
       },
     ],
     pixConfig: {
-      enabled: true,
+      enabled: false,
       keyType: 'cnpj',
       pixKey: '12.345.678/0001-95',
       beneficiaryName: 'Mayrah Esmalteria Vip',
@@ -178,7 +178,7 @@ export const INITIAL_BIOSITES: Biosite[] = [
       buttonTextColor: 'padrão',
     },
     wifiConfig: {
-      enabled: true,
+      enabled: false,
       networkName: 'Studio_BellaNails_Clientes',
       password: 'senha123',
       hasCardBg: false,
@@ -188,20 +188,17 @@ export const INITIAL_BIOSITES: Biosite[] = [
     },
     locationConfig: {
       enabled: true,
-      address: 'Rua das Camélias, 342 - Sala 03, Moema',
+      address: 'Rua das Camélias, 342 - Sala 03, Moema, São Paulo - SP',
       cityState: 'São Paulo - SP',
-      googleMapsUrl: 'https://maps.google.com/?q=Moema+Sao+Paulo',
+      googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Rua+das+Cam%C3%A9lias%2C+342+-+Sala+03%2C+Moema%2C+S%C3%A3o+Paulo+-+SP',
       wazeUrl: 'https://waze.com/ul?q=Moema+Sao+Paulo',
+      buttonText: 'Como chegar',
+      cardBgColor: '#ffffff',
+      cardTextColor: '#171717',
+      buttonBgColor: '#10b981',
+      buttonTextColor: '#ffffff',
     },
-    businessHours: [
-      { dayOfWeek: 0, dayName: 'Domingo', openTime: '00:00', closeTime: '00:00', closed: true },
-      { dayOfWeek: 1, dayName: 'Segunda-feira', openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-      { dayOfWeek: 2, dayName: 'Terça-feira', openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-      { dayOfWeek: 3, dayName: 'Quarta-feira', openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-      { dayOfWeek: 4, dayName: 'Quinta-feira', openTime: '09:00', closeTime: '20:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-      { dayOfWeek: 5, dayName: 'Sexta-feira', openTime: '08:30', closeTime: '20:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-      { dayOfWeek: 6, dayName: 'Sábado', openTime: '08:30', closeTime: '18:00', lunchStart: '12:00', lunchEnd: '13:00', closed: false },
-    ],
+    businessHours: [],
     footerBranding: {
       enabled: true,
       agencyName: 'Vortex Mídia',
@@ -249,33 +246,30 @@ export const INITIAL_BIOSITES: Biosite[] = [
       },
     ],
     pixConfig: {
-      enabled: true,
+      enabled: false,
       keyType: 'cnpj',
       pixKey: '45.123.890/0001-99',
       beneficiaryName: 'Vintage Club Barbearia Ltda',
       city: 'São Paulo - SP',
     },
     wifiConfig: {
-      enabled: true,
+      enabled: false,
       networkName: 'VintageClub_Guest',
       password: 'navalhaecerveja',
     },
     locationConfig: {
       enabled: true,
-      address: 'Rua dos Pinheiros, 780 - Pinheiros',
+      address: 'Rua dos Pinheiros, 780 - Pinheiros, São Paulo - SP',
       cityState: 'São Paulo - SP',
-      googleMapsUrl: 'https://maps.google.com/?q=Pinheiros+Sao+Paulo',
+      googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Rua+dos+Pinheiros%2C+780+-+Pinheiros%2C+S%C3%A3o+Paulo+-+SP',
       wazeUrl: 'https://waze.com/ul?q=Pinheiros+Sao+Paulo',
+      buttonText: 'Como chegar',
+      cardBgColor: '#ffffff',
+      cardTextColor: '#171717',
+      buttonBgColor: '#10b981',
+      buttonTextColor: '#ffffff',
     },
-    businessHours: [
-      { dayOfWeek: 0, dayName: 'Domingo', openTime: '00:00', closeTime: '00:00', closed: true },
-      { dayOfWeek: 1, dayName: 'Segunda-feira', openTime: '10:00', closeTime: '20:00', closed: false },
-      { dayOfWeek: 2, dayName: 'Terça-feira', openTime: '10:00', closeTime: '20:00', closed: false },
-      { dayOfWeek: 3, dayName: 'Quarta-feira', openTime: '10:00', closeTime: '20:00', closed: false },
-      { dayOfWeek: 4, dayName: 'Quinta-feira', openTime: '10:00', closeTime: '21:00', closed: false },
-      { dayOfWeek: 5, dayName: 'Sexta-feira', openTime: '09:00', closeTime: '21:00', closed: false },
-      { dayOfWeek: 6, dayName: 'Sábado', openTime: '09:00', closeTime: '19:00', closed: false },
-    ],
+    businessHours: [],
     footerBranding: {
       enabled: true,
       agencyName: 'Vortex Mídia',
@@ -288,114 +282,7 @@ export const INITIAL_BIOSITES: Biosite[] = [
   }
 ];
 
-export const INITIAL_SERVICES: Service[] = [
-  // Serviços do Studio Bella Nails
-  {
-    id: 'srv-1',
-    biositeId: 'bio-bella-nails',
-    name: 'Alongamento em Fibra de Vidro',
-    description: 'Alongamento ultra natural com acabamento fino, alta resistência e durabilidade de até 30 dias. Inclui cutilagem e esmaltação.',
-    category: 'Alongamentos',
-    durationMinutes: 90,
-    price: 150.00,
-    promotionalPrice: 129.90,
-    images: [
-      'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 0,
-    active: true,
-  },
-  {
-    id: 'srv-2',
-    biositeId: 'bio-bella-nails',
-    name: 'Manutenção de Fibra de Vidro',
-    description: 'Reposição da fibra, nivelamento, ajuste de comprimento e nova cutilagem completa.',
-    category: 'Alongamentos',
-    durationMinutes: 60,
-    price: 95.00,
-    images: [
-      'https://images.unsplash.com/photo-1519014816548-bf5fe059798b?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 1,
-    active: true,
-  },
-  {
-    id: 'srv-3',
-    biositeId: 'bio-bella-nails',
-    name: 'Spa dos Pés + Plástica dos Pés',
-    description: 'Remoção de calosidades, esfoliação com sais marinhos, hidratação profunda em parafina morna e massagem relaxante.',
-    category: 'Cuidados & Spa',
-    durationMinutes: 50,
-    price: 85.00,
-    promotionalPrice: 69.90,
-    images: [
-      'https://images.unsplash.com/photo-1519415510236-718bdfcd89c8?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 2,
-    active: true,
-  },
-  {
-    id: 'srv-4',
-    biositeId: 'bio-bella-nails',
-    name: 'Esmaltação em Gel Completa (Mãos)',
-    description: 'Brilho espelhado que não descasca por até 20 dias. Secagem instantânea na cabine LED.',
-    category: 'Esmaltação',
-    durationMinutes: 45,
-    price: 60.00,
-    images: [
-      'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 3,
-    active: true,
-  },
-
-  // Serviços da Barbearia Vintage Club
-  {
-    id: 'srv-5',
-    biositeId: 'bio-barber-club',
-    name: 'Corte Degradê Fade + Lavagem',
-    description: 'Corte moderno na tesoura e máquina com transição suave, finalização com pomada matte e lavagem capilar com massagem craniana.',
-    category: 'Cabelo',
-    durationMinutes: 45,
-    price: 65.00,
-    promotionalPrice: 55.00,
-    images: [
-      'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 0,
-    active: true,
-  },
-  {
-    id: 'srv-6',
-    biositeId: 'bio-barber-club',
-    name: 'Barboterapia com Toalha Quente',
-    description: 'Alinhamento da barba na navalha, esfoliação facial, aplicação de óleo hidratante com toalha aromatizada a vapor e pós-barba mentolado.',
-    category: 'Barba',
-    durationMinutes: 40,
-    price: 55.00,
-    images: [
-      'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 1,
-    active: true,
-  },
-  {
-    id: 'srv-7',
-    biositeId: 'bio-barber-club',
-    name: 'Combo Master (Corte + Barba + Chopp)',
-    description: 'Experiência completa da casa: corte personalizado, barboterapia relaxante e um chopp artesanal gelado por nossa conta.',
-    category: 'Combos',
-    durationMinutes: 75,
-    price: 110.00,
-    promotionalPrice: 95.00,
-    images: [
-      'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=600&auto=format&fit=crop&q=80'
-    ],
-    orderIndex: 2,
-    active: true,
-  },
-];
+export const INITIAL_SERVICES: Service[] = [];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
   {
