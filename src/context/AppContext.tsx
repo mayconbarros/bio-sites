@@ -5,7 +5,8 @@ import {
   Appointment, 
   AppointmentStatus, 
   AgencySettings,
-  AnalyticsEventType
+  AnalyticsEventType,
+  Professional
 } from '../types';
 import { 
   INITIAL_BIOSITES, 
@@ -26,6 +27,7 @@ interface AppContextType {
   
   biosites: Biosite[];
   services: Service[];
+  professionals: Professional[];
   appointments: Appointment[];
   agencySettings: AgencySettings;
 
@@ -38,6 +40,10 @@ interface AppContextType {
   addService: (data: Omit<Service, 'id'>) => Service;
   updateService: (id: string, data: Partial<Service>) => void;
   deleteService: (id: string) => void;
+
+  addProfessional: (data: Partial<Professional> & { name: string; biositeId: string }) => Professional;
+  updateProfessional: (id: string, data: Partial<Professional>) => void;
+  deleteProfessional: (id: string) => void;
 
   addAppointment: (data: Omit<Appointment, 'id' | 'createdAt' | 'status'> & { status?: AppointmentStatus }) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
@@ -80,6 +86,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_SERVICES;
   });
 
+  const [professionals, setProfessionals] = useState<Professional[]>(() => {
+    const saved = localStorage.getItem('biosaas_professionals');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const saved = localStorage.getItem('biosaas_appointments');
     return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
@@ -106,6 +117,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('biosaas_services', JSON.stringify(services));
   }, [services]);
+
+  useEffect(() => {
+    localStorage.setItem('biosaas_professionals', JSON.stringify(professionals));
+  }, [professionals]);
 
   useEffect(() => {
     localStorage.setItem('biosaas_appointments', JSON.stringify(appointments));
@@ -215,6 +230,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteService = (id: string) => {
     setServices(prev => prev.filter(s => s.id !== id));
     showToast('Serviço removido!');
+  };
+
+  const addProfessional = (data: Partial<Professional> & { name: string; biositeId: string }): Professional => {
+    const newProfessional: Professional = {
+      id: `prof-${Date.now()}`,
+      biositeId: data.biositeId,
+      name: data.name.trim() || 'Colaboradora Maria',
+      photoUrl: data.photoUrl,
+      color: data.color || '#1d4ed8',
+      active: data.active ?? true,
+      services: data.services || [],
+      workSchedule: data.workSchedule || [
+        { dayOfWeek: 0, dayLabel: 'Dom', enabled: false },
+        { dayOfWeek: 1, dayLabel: 'Seg', enabled: false },
+        { dayOfWeek: 2, dayLabel: 'Ter', enabled: false },
+        { dayOfWeek: 3, dayLabel: 'Qua', enabled: false },
+        { dayOfWeek: 4, dayLabel: 'Qui', enabled: false },
+        { dayOfWeek: 5, dayLabel: 'Sex', enabled: false },
+        { dayOfWeek: 6, dayLabel: 'Sáb', enabled: false },
+      ],
+      blockedDates: data.blockedDates || [],
+      createdAt: new Date().toISOString(),
+    };
+    setProfessionals(prev => [newProfessional, ...prev]);
+    return newProfessional;
+  };
+
+  const updateProfessional = (id: string, data: Partial<Professional>) => {
+    setProfessionals(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+  };
+
+  const deleteProfessional = (id: string) => {
+    setProfessionals(prev => prev.filter(p => p.id !== id));
+    showToast('Profissional removido!');
   };
 
   const addAppointment = (data: Omit<Appointment, 'id' | 'createdAt' | 'status'> & { status?: AppointmentStatus }): Appointment => {
@@ -329,6 +378,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPreviewDevice,
         biosites,
         services,
+        professionals,
         appointments,
         agencySettings,
         updateAgencySettings,
@@ -339,6 +389,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addService,
         updateService,
         deleteService,
+        addProfessional,
+        updateProfessional,
+        deleteProfessional,
         addAppointment,
         updateAppointmentStatus,
         deleteAppointment,

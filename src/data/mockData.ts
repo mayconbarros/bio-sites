@@ -282,7 +282,44 @@ export const INITIAL_BIOSITES: Biosite[] = [
   }
 ];
 
-export const INITIAL_SERVICES: Service[] = [];
+export const INITIAL_SERVICES: Service[] = [
+  {
+    id: 'srv-soft-gel',
+    biositeId: 'bio-bella-nails',
+    name: 'Alongamento Soft Gel',
+    description: 'Alongamento com técnica Soft Gel, acabamento natural e alta durabilidade.',
+    category: 'Alongamento',
+    durationMinutes: 60,
+    price: 150,
+    images: ['https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop&q=80'],
+    orderIndex: 0,
+    active: true,
+  },
+  {
+    id: 'srv-molde-f1',
+    biositeId: 'bio-bella-nails',
+    name: 'Alongamento Molde F1',
+    description: 'Técnica rápida e precisa com molde dual form F1 e brilho espelhado.',
+    category: 'Alongamento',
+    durationMinutes: 60,
+    price: 150,
+    images: ['https://images.unsplash.com/photo-1604654894610-df63bc536371?w=600&auto=format&fit=crop&q=80'],
+    orderIndex: 1,
+    active: true,
+  },
+  {
+    id: 'srv-fibra-vidro',
+    biositeId: 'bio-bella-nails',
+    name: 'Alongamento em Fibra de Vidro',
+    description: 'Fios ultrafinos de fibra de vidro adaptáveis a qualquer formato de leito ungueal.',
+    category: 'Alongamento',
+    durationMinutes: 60,
+    price: 150,
+    images: ['https://images.unsplash.com/photo-1519014816548-bf5fe059798b?w=600&auto=format&fit=crop&q=80'],
+    orderIndex: 2,
+    active: true,
+  },
+];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
   {

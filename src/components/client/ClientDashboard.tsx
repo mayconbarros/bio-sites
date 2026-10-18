@@ -5,6 +5,7 @@ import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
 import { THEME_PRESETS } from '../../data/mockData';
 import { CustomToggle } from '../common/CustomToggle';
+import { ProfissionaisTab } from './ProfissionaisTab';
 import confetti from 'canvas-confetti';
 import { 
   BarChart2, 
@@ -286,7 +287,7 @@ export const ClientDashboard: React.FC = () => {
     getBiositeStats 
   } = useApp();
 
-  const [selectedTab, setSelectedTab] = useState<string>('catalogo');
+  const [selectedTab, setSelectedTab] = useState<string>('profissionais');
   const [selectedCategory, setSelectedCategory] = useState<string>('Beleza');
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
   const [datePeriod, setDatePeriod] = useState<'hoje' | 'ontem' | '7d' | '15d' | '30d' | 'maximo'>('30d');
@@ -1548,13 +1549,13 @@ export const ClientDashboard: React.FC = () => {
             <span>Abrir</span>
           </button>
 
-          {/* Publicar Button (Lime neon) */}
+          {/* Republicar Button (Lime neon matching screenshots) */}
           <button
             onClick={handlePublish}
-            className="px-4 py-1.5 rounded-lg bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-900 text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+            className="px-4 py-1.5 rounded-lg bg-[#bef264] hover:bg-[#aee625] text-neutral-900 text-xs font-black flex items-center gap-1.5 shadow-xs transition cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Publicar</span>
+            <span>Republicar</span>
           </button>
 
           {/* Sair Button */}
@@ -4683,8 +4684,13 @@ export const ClientDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* TAB: PROFISSIONAIS matching screenshots */}
+          {selectedTab === 'profissionais' && (
+            <ProfissionaisTab />
+          )}
+
           {/* EDITING TABS: Re-uses BioSiteEditor smoothly */}
-          {(['titulos', 'leads', 'layout', 'links', 'profissionais', 'pix', 'cadastros'].includes(selectedTab)) && (
+          {(['titulos', 'leads', 'layout', 'links', 'pix', 'cadastros'].includes(selectedTab)) && (
             <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-neutral-200 p-6 shadow-2xs animate-in fade-in duration-200">
               <BioSiteEditor 
                 biosite={activeBiosite} 

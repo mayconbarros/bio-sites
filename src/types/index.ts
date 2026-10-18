@@ -116,6 +116,34 @@ export interface Service {
   active: boolean;
 }
 
+export interface ProfessionalServiceConfig {
+  serviceId: string;
+  customPrice?: number;
+  customDurationMinutes?: number;
+  enabled: boolean;
+}
+
+export interface ProfessionalDaySchedule {
+  dayOfWeek: number; // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  dayLabel: string;  // 'Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'
+  enabled: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface Professional {
+  id: string;
+  biositeId: string;
+  name: string;
+  photoUrl?: string;
+  color: string; // ex: '#1d4ed8'
+  active: boolean;
+  services: ProfessionalServiceConfig[];
+  workSchedule: ProfessionalDaySchedule[];
+  blockedDates: string[]; // ['2026-12-25', ...]
+  createdAt: string;
+}
+
 export interface CatalogItem {
   id: string;
   type: 'image' | 'video' | 'tour';
