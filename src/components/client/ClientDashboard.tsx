@@ -318,6 +318,11 @@ export const ClientDashboard: React.FC = () => {
   const [newCatalogTitle, setNewCatalogTitle] = useState('Nossos serviços');
   const newCatalogInputRef = useRef<HTMLInputElement>(null);
 
+  // Media file input refs for Aparência tab (Upload from computer)
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const coverImageFileInputRef = useRef<HTMLInputElement>(null);
+  const coverVideoFileInputRef = useRef<HTMLInputElement>(null);
+
   const handleOpenNewCatalogModal = () => {
     setNewCatalogTitle('Nossos serviços');
     setIsNewCatalogModalOpen(true);
@@ -594,40 +599,86 @@ export const ClientDashboard: React.FC = () => {
     showToast('Alterações de aparência salvas com sucesso!', 'success');
   };
 
-  const handleCycleAvatar = () => {
-    const avatars = [
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80',
-    ];
-    const currentIdx = avatars.indexOf(appearanceForm.avatarUrl);
-    const nextAvatar = avatars[(currentIdx + 1) % avatars.length];
-    setAppearanceForm(prev => ({ ...prev, avatarUrl: nextAvatar }));
-    showToast('Logo alterada!');
-  };
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleCycleCover = () => {
-    const covers = [
-      'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=1200&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1200&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1200&auto=format&fit=crop&q=80',
-    ];
-    const currentIdx = covers.indexOf(appearanceForm.coverUrl);
-    const nextCover = covers[(currentIdx + 1) % covers.length];
-    setAppearanceForm(prev => ({ ...prev, coverUrl: nextCover, videoUrl: '' }));
-    showToast('Imagem de capa alterada!');
-  };
-
-  const handleToggleVideo = () => {
-    const sampleVideo = 'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-manicurist-applying-varnish-41133-large.mp4';
-    if (appearanceForm.videoUrl) {
-      setAppearanceForm(prev => ({ ...prev, videoUrl: '' }));
-      showToast('Vídeo de capa removido!');
-    } else {
-      setAppearanceForm(prev => ({ ...prev, videoUrl: sampleVideo }));
-      showToast('Vídeo de capa adicionado!');
+    if (!file.type.startsWith('image/')) {
+      showToast('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WebP, etc.).', 'error');
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const resultUrl = reader.result;
+        setAppearanceForm(prev => ({ ...prev, avatarUrl: resultUrl }));
+        if (activeBiosite) {
+          updateBiosite(activeBiosite.id, { avatarUrl: resultUrl });
+        }
+        showToast('Logo carregada do computador com sucesso!', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleCoverImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Por favor, selecione um arquivo de imagem válido.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const resultUrl = reader.result;
+        setAppearanceForm(prev => ({ ...prev, coverUrl: resultUrl, videoUrl: '' }));
+        if (activeBiosite) {
+          updateBiosite(activeBiosite.id, { 
+            coverUrl: resultUrl,
+            ...({ videoUrl: '' } as any)
+          });
+        }
+        showToast('Imagem de capa carregada do computador com sucesso!', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleCoverVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      showToast('Por favor, selecione um arquivo de vídeo válido (MP4, WebM, MOV).', 'error');
+      return;
+    }
+
+    if (file.size > 100 * 1024 * 1024) {
+      showToast('O arquivo de vídeo deve ter no máximo 100MB.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const resultUrl = reader.result;
+        setAppearanceForm(prev => ({ ...prev, videoUrl: resultUrl }));
+        if (activeBiosite) {
+          updateBiosite(activeBiosite.id, { 
+            ...({ videoUrl: resultUrl } as any)
+          });
+        }
+        showToast('Vídeo de capa carregado do computador com sucesso!', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Button Models matching the reference screenshot (Print 2)
@@ -2164,16 +2215,32 @@ export const ClientDashboard: React.FC = () => {
                     <label className="text-xs font-bold text-neutral-800 block mb-2">
                       Logo
                     </label>
+                    <input
+                      type="file"
+                      ref={logoFileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoUpload}
+                    />
                     <div className="flex items-center gap-3.5">
-                      <img 
-                        src={appearanceForm.avatarUrl} 
-                        alt="Logo" 
-                        className={`w-14 h-14 ${appearanceForm.logoShape === 'square' ? 'rounded-2xl' : 'rounded-full'} object-cover border border-neutral-200 shadow-2xs bg-neutral-100`}
-                      />
+                      <div 
+                        onClick={() => logoFileInputRef.current?.click()}
+                        className="cursor-pointer group relative"
+                        title="Clique para escolher logo do computador"
+                      >
+                        <img 
+                          src={appearanceForm.avatarUrl} 
+                          alt="Logo" 
+                          className={`w-14 h-14 ${appearanceForm.logoShape === 'square' ? 'rounded-2xl' : 'rounded-full'} object-cover border border-neutral-200 shadow-2xs bg-neutral-100 group-hover:opacity-85 transition`}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 rounded-[inherit] transition text-white">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={handleCycleAvatar}
-                        className="px-4 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                        onClick={() => logoFileInputRef.current?.click()}
+                        className="px-4 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         <span>Trocar logo</span>
@@ -2238,14 +2305,39 @@ export const ClientDashboard: React.FC = () => {
                     <label className="text-xs font-bold text-neutral-800 block mb-2">
                       Imagem de fundo/capa
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleCycleCover}
-                      className="px-4 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5 text-neutral-500" />
-                      <span>Enviar imagem</span>
-                    </button>
+                    <input
+                      type="file"
+                      ref={coverImageFileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleCoverImageUpload}
+                    />
+                    <div className="flex items-center gap-3">
+                      {appearanceForm.coverUrl && (
+                        <div 
+                          onClick={() => coverImageFileInputRef.current?.click()}
+                          className="w-16 h-12 rounded-xl border border-neutral-300 overflow-hidden relative group cursor-pointer shrink-0 shadow-2xs"
+                          title="Clique para escolher imagem do computador"
+                        >
+                          <img 
+                            src={appearanceForm.coverUrl} 
+                            alt="Capa" 
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition">
+                            <Upload className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => coverImageFileInputRef.current?.click()}
+                        className="px-4 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-neutral-500" />
+                        <span>Enviar imagem</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 5. Vídeo de capa (opcional) matching screenshot */}
@@ -2256,38 +2348,65 @@ export const ClientDashboard: React.FC = () => {
                     <p className="text-[11px] text-neutral-500 mb-3 leading-tight font-medium">
                       Se enviar um vídeo, ele substitui a imagem de capa e roda em loop automático (mudo). MP4, WebM ou MOV — até 60s.
                     </p>
+                    <input
+                      type="file"
+                      ref={coverVideoFileInputRef}
+                      accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov"
+                      className="hidden"
+                      onChange={handleCoverVideoUpload}
+                    />
                     <div className="flex items-center gap-3">
                       {/* Video Thumbnail with TROCAR label */}
-                      <div className="w-20 h-12 rounded-xl border border-neutral-300 bg-neutral-900 relative overflow-hidden flex items-center justify-center shrink-0">
-                        <img 
-                          src={appearanceForm.coverUrl} 
-                          alt="Thumbnail" 
-                          className="w-full h-full object-cover opacity-60" 
-                        />
-                        <span className="absolute text-[8px] font-black uppercase tracking-wider text-white bg-black/70 px-1 py-0.5 rounded">
+                      <div 
+                        onClick={() => coverVideoFileInputRef.current?.click()}
+                        className="w-20 h-12 rounded-xl border border-neutral-300 bg-neutral-900 relative overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group shadow-2xs"
+                        title="Clique para escolher vídeo do computador"
+                      >
+                        {appearanceForm.videoUrl ? (
+                          <video 
+                            src={appearanceForm.videoUrl} 
+                            className="w-full h-full object-cover" 
+                            muted 
+                            loop 
+                            autoPlay 
+                            playsInline 
+                          />
+                        ) : (
+                          <img 
+                            src={appearanceForm.coverUrl} 
+                            alt="Thumbnail" 
+                            className="w-full h-full object-cover opacity-60" 
+                          />
+                        )}
+                        <span className="absolute text-[8px] font-black uppercase tracking-wider text-white bg-black/70 px-1 py-0.5 rounded group-hover:bg-[#ff007f] transition">
                           TROCAR
                         </span>
                       </div>
 
                       <button
                         type="button"
-                        onClick={handleToggleVideo}
-                        className="px-3.5 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                        onClick={() => coverVideoFileInputRef.current?.click()}
+                        className="px-3.5 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
                       >
                         <Upload className="w-3.5 h-3.5 text-neutral-500" />
                         <span>Trocar vídeo</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAppearanceForm(p => ({ ...p, videoUrl: '' }));
-                          showToast('Vídeo removido!');
-                        }}
-                        className="text-xs font-semibold text-neutral-500 hover:text-red-600 px-2 transition cursor-pointer"
-                      >
-                        Remover
-                      </button>
+                      {appearanceForm.videoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppearanceForm(p => ({ ...p, videoUrl: '' }));
+                            if (activeBiosite) {
+                              updateBiosite(activeBiosite.id, { ...({ videoUrl: '' } as any) });
+                            }
+                            showToast('Vídeo removido!');
+                          }}
+                          className="text-xs font-semibold text-neutral-500 hover:text-red-600 px-2 transition cursor-pointer"
+                        >
+                          Remover
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2479,9 +2598,18 @@ export const ClientDashboard: React.FC = () => {
                   {previewDevice === 'desktop' ? (
                     /* EXACT DESKTOP PREVIEW MATCHING SCREENSHOT */
                     <div className="w-full rounded-[26px] border-[3px] border-neutral-900 bg-white shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-200">
-                      {/* Cover banner image */}
+                      {/* Cover banner image / video */}
                       <div className="relative w-full h-56 sm:h-64 overflow-hidden bg-neutral-900">
-                        {previewBiosite.coverUrl ? (
+                        {(previewBiosite as any).videoUrl ? (
+                          <video 
+                            src={(previewBiosite as any).videoUrl} 
+                            autoPlay 
+                            loop 
+                            muted 
+                            playsInline 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : previewBiosite.coverUrl ? (
                           <img 
                             src={previewBiosite.coverUrl} 
                             alt={previewBiosite.title}
