@@ -84,7 +84,7 @@ export const AgencyDashboard: React.FC = () => {
 
   const handleCopyLink = (slug: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `coonexta.com.br/${slug}`;
+    const url = `bio.mbwebdigital.com.br/${slug}`;
     if (navigator?.clipboard) {
       navigator.clipboard.writeText(url);
     }
@@ -151,9 +151,9 @@ export const AgencyDashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* O link "coonexta.com.br/esmalteriavivp" */}
+                    {/* O link "bio.mbwebdigital.com.br/esmalteriavivp" */}
                     <p className="text-xs text-neutral-500 mt-1 font-normal">
-                      coonexta.com.br/{site.slug}
+                      bio.mbwebdigital.com.br/{site.slug}
                     </p>
 
                     {/* Embaixo disso, ícone de olho com "0 visualizações" */}

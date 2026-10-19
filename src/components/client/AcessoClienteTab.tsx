@@ -203,7 +203,7 @@ export const AcessoClienteTab: React.FC = () => {
 
   // Copiar link do cliente
   const handleCopyClientLink = () => {
-    const link = `https://www.coonexta.com.br/painel/${activeBiosite?.slug || 'site'}`;
+    const link = `https://bio.mbwebdigital.com.br/painel/${activeBiosite?.slug || 'site'}`;
     navigator.clipboard.writeText(link);
     showToast('Link de acesso copiado!');
   };

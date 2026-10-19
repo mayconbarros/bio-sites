@@ -21,7 +21,7 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col justify-between shrink-0 min-h-screen select-none">
       <div>
-        {/* Logo Coonexta */}
+        {/* Logo MB Web Digital */}
         <div className="p-5 flex items-center gap-3 border-b border-neutral-100">
           <div className="w-10 h-10 rounded-xl bg-[#ff2a85] flex items-center justify-center text-white shadow-md shadow-pink-500/20 shrink-0">
             {/* Custom soundwave broadcast icon */}
@@ -31,7 +31,7 @@ export const Sidebar: React.FC = () => {
           </div>
           <div>
             <span className="font-extrabold text-base tracking-tight text-neutral-900 block leading-tight">
-              Coonexta
+              MB Web Digital
             </span>
           </div>
         </div>
@@ -74,7 +74,7 @@ export const Sidebar: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => showToast('Programa Seja Parceiro: Ganhe comissões indicando a Coonexta!', 'info')}
+                onClick={() => showToast('Programa Seja Parceiro: Ganhe comissões indicando a MB Web Digital!', 'info')}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition cursor-pointer"
               >
                 <Gift className="w-4 h-4 text-neutral-500" />
@@ -84,7 +84,7 @@ export const Sidebar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20Coonexta', '_blank');
+                  window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20MB%20Web%20Digital', '_blank');
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition cursor-pointer"
               >

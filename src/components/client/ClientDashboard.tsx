@@ -1282,7 +1282,7 @@ export const ClientDashboard: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const handleCopyLink = () => {
-    const fullUrl = `https://www.coonexta.com.br/${activeBiosite.slug}`;
+    const fullUrl = `https://bio.mbwebdigital.com.br/${activeBiosite.slug}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedLink(true);
     showToast('Link do mini-site copiado!');
@@ -1298,7 +1298,7 @@ export const ClientDashboard: React.FC = () => {
     if (activeBiosite) {
       updateBiosite(activeBiosite.id, { status: 'active' });
     }
-    showToast('Mini-site publicado com sucesso na Coonexta!', 'success');
+    showToast('Mini-site publicado com sucesso na MB Web Digital!', 'success');
   };
 
   const handleSaveManualAppointment = (e: React.FormEvent) => {
@@ -1522,7 +1522,7 @@ export const ClientDashboard: React.FC = () => {
 
         <div className="flex items-center gap-5">
           <button 
-            onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20Coonexta', '_blank')}
+            onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20MB%20Web%20Digital', '_blank')}
             className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer"
           >
             <Headphones className="w-3.5 h-3.5 text-neutral-500" />
@@ -1568,7 +1568,7 @@ export const ClientDashboard: React.FC = () => {
             className="text-xs text-neutral-500 hover:text-neutral-900 font-mono transition ml-1"
             title="Clique para copiar link"
           >
-            www.coonexta.com.br/{activeBiosite.slug}
+            bio.mbwebdigital.com.br/{activeBiosite.slug}
           </button>
         </div>
 
@@ -4623,7 +4623,7 @@ export const ClientDashboard: React.FC = () => {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-neutral-900">
-                      Programa Seja Parceiro Coonexta
+                      Programa Seja Parceiro MB Web Digital
                     </h2>
                     <p className="text-xs text-neutral-500 mt-1 font-normal leading-relaxed">
                       Indique outros profissionais e estabelecimentos e ganhe comissões mensais recorrentes para cada cliente ativo.
@@ -4662,7 +4662,7 @@ export const ClientDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://www.coonexta.com.br/r/${activeBiosite?.slug || 'parceiro'}`);
+                        navigator.clipboard.writeText(`https://bio.mbwebdigital.com.br/r/${activeBiosite?.slug || 'parceiro'}`);
                         setFloatingToast('Link de parceiro copiado!');
                         setTimeout(() => setFloatingToast(null), 2500);
                       }}
@@ -4674,7 +4674,7 @@ export const ClientDashboard: React.FC = () => {
                   </div>
 
                   <div className="p-3 rounded-xl bg-neutral-800 text-xs font-mono text-emerald-400 select-all break-all">
-                    https://www.coonexta.com.br/r/{activeBiosite?.slug || 'parceiro'}
+                    https://bio.mbwebdigital.com.br/r/{activeBiosite?.slug || 'parceiro'}
                   </div>
                 </div>
 
@@ -4682,7 +4682,7 @@ export const ClientDashboard: React.FC = () => {
                 <div className="pt-2 flex justify-start">
                   <button
                     type="button"
-                    onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20o%20Programa%20de%20Parceiros%20Coonexta', '_blank')}
+                    onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20o%20Programa%20de%20Parceiros%20MB%20Web%20Digital', '_blank')}
                     className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-xs cursor-pointer"
                   >
                     <MessageCircle className="w-4 h-4" />
@@ -4733,7 +4733,7 @@ export const ClientDashboard: React.FC = () => {
             <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 inline-block mx-auto mb-5">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                  `https://www.coonexta.com.br/${activeBiosite.slug}`
+                  `https://bio.mbwebdigital.com.br/${activeBiosite.slug}`
                 )}`}
                 alt="QR Code"
                 className="w-48 h-48 mx-auto"

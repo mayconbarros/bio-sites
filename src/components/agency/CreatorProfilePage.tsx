@@ -84,7 +84,7 @@ export const CreatorProfilePage: React.FC = () => {
               Assinatura do criador
             </h2>
             <p className="text-xs text-neutral-600 mt-1 leading-relaxed">
-              Esse nome e link aparecem no rodapé de <strong className="font-bold text-neutral-900">todos os seus mini-sites</strong>, no lugar de "Feito por Coonexta".
+              Esse nome e link aparecem no rodapé de <strong className="font-bold text-neutral-900">todos os seus mini-sites</strong>, no lugar de "Feito por MB Web Digital".
             </p>
           </div>
 
