@@ -249,6 +249,13 @@ export interface AgencySettings {
   logoUrl?: string;
 }
 
+export interface CreatorProfile {
+  name: string;
+  photoUrl: string;
+  linkType: 'none' | 'whatsapp' | 'site';
+  linkUrl: string;
+}
+
 export function isItemVideo(item?: { type?: string; mediaType?: string; imageUrl?: string }): boolean {
   if (!item) return false;
   if (item.mediaType === 'video' || item.type === 'video') return true;

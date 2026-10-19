@@ -176,38 +176,42 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
         )}
       </div>
 
-      {/* 3. Área de Conteúdo (Textos e Botão): Padding aplicado apenas nessa div inferior */}
-      <div className="p-4 space-y-1.5">
-        {currentItem.title ? (
-          <h4 className="text-sm font-bold text-neutral-900 tracking-tight leading-snug">
-            {currentItem.title}
-          </h4>
-        ) : null}
+      {/* 3. Área de Conteúdo (Textos e Botão): Padding aplicado apenas nessa div inferior se houver conteúdo */}
+      {(currentItem.title || currentItem.description || currentItem.buttonText?.trim()) ? (
+        <div className="p-4 space-y-1.5">
+          {currentItem.title ? (
+            <h4 className="text-sm font-bold text-neutral-900 tracking-tight leading-snug">
+              {currentItem.title}
+            </h4>
+          ) : null}
 
-        {currentItem.description ? (
-          <p className="text-xs text-neutral-600 leading-relaxed font-normal">
-            {currentItem.description}
-          </p>
-        ) : null}
+          {currentItem.description ? (
+            <p className="text-xs text-neutral-600 leading-relaxed font-normal">
+              {currentItem.description}
+            </p>
+          ) : null}
 
-        {/* Botão de acesso em rosa vibrante (#ff2a85) com alinhamento */}
-        <div className={`pt-2 flex ${
-          currentItem.buttonAlign === 'center' ? 'justify-center' :
-          currentItem.buttonAlign === 'right' ? 'justify-end' : 'justify-start'
-        }`}>
-          <a
-            href={currentItem.url || '#'}
-            target={currentItem.url ? '_blank' : undefined}
-            rel="noreferrer"
-            onClick={(e) => {
-              if (!currentItem.url) e.preventDefault();
-            }}
-            className="px-4 py-1.5 rounded-lg bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white text-xs font-bold transition shadow-xs inline-flex items-center justify-center cursor-pointer"
-          >
-            {currentItem.buttonText?.trim() || 'Acessar'}
-          </a>
+          {/* Botão de acesso em rosa vibrante (#ff2a85) com alinhamento — só aparece se o texto do botão for preenchido */}
+          {currentItem.buttonText?.trim() ? (
+            <div className={`pt-2 flex ${
+              currentItem.buttonAlign === 'center' ? 'justify-center' :
+              currentItem.buttonAlign === 'right' ? 'justify-end' : 'justify-start'
+            }`}>
+              <a
+                href={currentItem.url || '#'}
+                target={currentItem.url ? '_blank' : undefined}
+                rel="noreferrer"
+                onClick={(e) => {
+                  if (!currentItem.url) e.preventDefault();
+                }}
+                className="px-4 py-1.5 rounded-lg bg-[#ff2a85] hover:bg-[#e02475] active:scale-95 text-white text-xs font-bold transition shadow-xs inline-flex items-center justify-center cursor-pointer"
+              >
+                {currentItem.buttonText.trim()}
+              </a>
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
 
       {/* Paginação (dots/pílulas): Visível se houver 2 ou mais itens */}
       {isMultiple && (

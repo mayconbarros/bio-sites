@@ -285,10 +285,13 @@ export const ClientDashboard: React.FC = () => {
     addAppointment,
     setCurrentView,
     showToast,
-    getBiositeStats 
+    getBiositeStats,
+    clientActiveTab,
+    setClientActiveTab,
   } = useApp();
 
-  const [selectedTab, setSelectedTab] = useState<string>('profissionais');
+  const selectedTab = clientActiveTab || 'aparencia';
+  const setSelectedTab = setClientActiveTab;
   const [selectedCategory, setSelectedCategory] = useState<string>('Beleza');
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
   const [datePeriod, setDatePeriod] = useState<'hoje' | 'ontem' | '7d' | '15d' | '30d' | 'maximo'>('30d');
@@ -1292,6 +1295,9 @@ export const ClientDashboard: React.FC = () => {
       spread: 70,
       origin: { y: 0.2 }
     });
+    if (activeBiosite) {
+      updateBiosite(activeBiosite.id, { status: 'active' });
+    }
     showToast('Mini-site publicado com sucesso na Coonexta!', 'success');
   };
 

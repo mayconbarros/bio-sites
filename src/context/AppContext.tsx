@@ -6,7 +6,8 @@ import {
   AppointmentStatus, 
   AgencySettings,
   AnalyticsEventType,
-  Professional
+  Professional,
+  CreatorProfile
 } from '../types';
 import { 
   INITIAL_BIOSITES, 
@@ -20,6 +21,10 @@ export type AppView = 'agency' | 'client' | 'public';
 interface AppContextType {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
+  agencyActiveTab: 'sites' | 'profile';
+  setAgencyActiveTab: (tab: 'sites' | 'profile') => void;
+  creatorProfile: CreatorProfile;
+  updateCreatorProfile: (profile: Partial<CreatorProfile>) => void;
   activeBiositeId: string;
   setActiveBiositeId: (id: string) => void;
   previewDevice: 'mobile' | 'desktop';
@@ -61,13 +66,16 @@ interface AppContextType {
   toast: { message: string; type: 'success' | 'info' | 'error' } | null;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   activeBiosite: Biosite | undefined;
+  clientActiveTab: string;
+  setClientActiveTab: (tab: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setCurrentView] = useState<AppView>('client');
+  const [currentView, setCurrentView] = useState<AppView>('agency');
   const [activeBiositeId, setActiveBiositeId] = useState<string>('bio-bella-nails');
+  const [clientActiveTab, setClientActiveTab] = useState<string>('aparencia');
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -117,6 +125,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('biosaas_appointments');
     return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
   });
+
+  const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'profile'>('sites');
+
+  const [creatorProfile, setCreatorProfile] = useState<CreatorProfile>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_creator_profile');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      name: 'Vision Local',
+      photoUrl: '',
+      linkType: 'whatsapp',
+      linkUrl: 'https://wa.me/5541996958060',
+    };
+  });
+
+  const updateCreatorProfile = (profile: Partial<CreatorProfile>) => {
+    setCreatorProfile(prev => {
+      const next = { ...prev, ...profile };
+      localStorage.setItem('biosaas_creator_profile', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const [agencySettings, setAgencySettings] = useState<AgencySettings>(() => {
     const saved = localStorage.getItem('biosaas_agency');
@@ -394,6 +425,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentView,
         setCurrentView,
+        agencyActiveTab,
+        setAgencyActiveTab,
+        creatorProfile,
+        updateCreatorProfile,
         activeBiositeId,
         setActiveBiositeId,
         previewDevice,
@@ -422,6 +457,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toast,
         showToast,
         activeBiosite,
+        clientActiveTab,
+        setClientActiveTab,
       }}
     >
       {children}

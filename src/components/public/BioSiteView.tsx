@@ -84,7 +84,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   isMockupFrame = false,
   onMoveButton 
 }) => {
-  const { services, trackEvent, showToast } = useApp();
+  const { services, trackEvent, showToast, creatorProfile } = useApp();
 
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
@@ -689,17 +689,40 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         )}
 
 
-        {/* RODAPÉ GLOBAL: Feito por MB Web Digital */}
+        {/* RODAPÉ DO MINI-SITE: Assinatura do Criador ("Feito por...") */}
         <div className="mt-8 pb-4 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
-          <span>Feito por&nbsp;</span>
-          <a
-            href="https://mbwebdigital.com.br"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gray-500 underline hover:text-gray-700 transition"
-          >
-            MB Web Digital
-          </a>
+          {creatorProfile?.linkType !== 'none' && creatorProfile?.linkUrl ? (
+            <a
+              href={creatorProfile.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:opacity-80 transition cursor-pointer text-neutral-800"
+            >
+              <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+                {creatorProfile.photoUrl ? (
+                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">
+                    on
+                  </span>
+                )}
+              </div>
+              <span>Feito por&nbsp;<strong>{creatorProfile.name || 'Vision Local'}</strong></span>
+            </a>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 text-neutral-800">
+              <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+                {creatorProfile?.photoUrl ? (
+                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">
+                    on
+                  </span>
+                )}
+              </div>
+              <span>Feito por&nbsp;<strong>{creatorProfile?.name || 'Vision Local'}</strong></span>
+            </div>
+          )}
         </div>
 
       </div>
