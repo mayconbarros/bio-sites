@@ -86,6 +86,13 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
 }) => {
   const { services, trackEvent, showToast, creatorProfile } = useApp();
 
+  // Set document title on public view
+  React.useEffect(() => {
+    if (!isMockupFrame && biosite?.title) {
+      document.title = `${biosite.title} | ${biosite.subtitle || 'Bio Site'}`;
+    }
+  }, [isMockupFrame, biosite?.title, biosite?.subtitle]);
+
   const [bookingOpen, setBookingOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
@@ -379,7 +386,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   return (
     <div 
       className={`min-h-full w-full transition-colors relative selection:bg-pink-500 selection:text-white ${
-        isMockupFrame ? 'p-0 text-sm' : 'max-w-md mx-auto min-h-screen shadow-2xl'
+        isMockupFrame ? 'p-0 text-sm' : 'w-full max-w-lg mx-auto min-h-screen sm:shadow-2xl shadow-none'
       }`}
       style={{
         background: biosite.themeConfig.bgGradient || biosite.themeConfig.bgColor || '#ffffff',

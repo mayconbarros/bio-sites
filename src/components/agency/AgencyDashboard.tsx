@@ -152,9 +152,16 @@ export const AgencyDashboard: React.FC = () => {
                     </div>
 
                     {/* O link "bio.mbwebdigital.com.br/esmalteriavivp" */}
-                    <p className="text-xs text-neutral-500 mt-1 font-normal">
+                    <a
+                      href={`/${site.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-neutral-500 hover:text-neutral-900 hover:underline mt-1 font-normal inline-block transition cursor-pointer"
+                      title="Abrir mini-site em nova aba"
+                    >
                       bio.mbwebdigital.com.br/{site.slug}
-                    </p>
+                    </a>
 
                     {/* Embaixo disso, ícone de olho com "0 visualizações" */}
                     <div className="flex items-center gap-1.5 text-xs text-neutral-400 mt-3">

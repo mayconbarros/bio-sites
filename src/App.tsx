@@ -9,54 +9,45 @@ import { Sidebar } from './components/layout/Sidebar';
 import { AgencyDashboard } from './components/agency/AgencyDashboard';
 import { ClientDashboard } from './components/client/ClientDashboard';
 import { BioSiteView } from './components/public/BioSiteView';
-import { CheckCircle2, AlertCircle, Info, Smartphone, Monitor } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 function AppContent() {
-  const { currentView, activeBiosite, toast, previewDevice, setPreviewDevice } = useApp();
+  const { currentView, activeBiosite, toast } = useApp();
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 flex font-sans antialiased">
+    <div 
+      className="min-h-screen flex font-sans antialiased"
+      style={{
+        background: currentView === 'public' && activeBiosite 
+          ? (activeBiosite.themeConfig.bgGradient || activeBiosite.themeConfig.bgColor || '#ffffff') 
+          : '#ffffff',
+        color: currentView === 'public' && activeBiosite
+          ? (activeBiosite.themeConfig.textColor || '#171717')
+          : '#171717'
+      }}
+    >
       {/* Left Sidebar Classic SaaS layout for Agency only */}
       {currentView === 'agency' && <Sidebar />}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      <div 
+        className="flex-1 flex flex-col min-w-0"
+        style={{
+          background: currentView === 'public' && activeBiosite 
+            ? (activeBiosite.themeConfig.bgGradient || activeBiosite.themeConfig.bgColor || '#ffffff') 
+            : '#ffffff'
+        }}
+      >
         {currentView === 'agency' && <AgencyDashboard />}
         {currentView === 'client' && <ClientDashboard />}
         {currentView === 'public' && activeBiosite && (
-          <div className="flex-1 flex flex-col items-center justify-start py-6 px-4 bg-neutral-100 min-h-screen">
-            {/* Device Switcher for Public Bio Site Demo */}
-            <div className="mb-4 flex items-center gap-2 p-1 rounded-2xl bg-white border border-neutral-200 text-xs shadow-xs">
-              <button
-                onClick={() => setPreviewDevice('mobile')}
-                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition ${
-                  previewDevice === 'mobile' 
-                    ? 'bg-[#ff2a85] text-white shadow-xs' 
-                    : 'text-neutral-600 hover:text-neutral-900'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                Formato Smartphone
-              </button>
-              <button
-                onClick={() => setPreviewDevice('desktop')}
-                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition ${
-                  previewDevice === 'desktop' 
-                    ? 'bg-[#ff2a85] text-white shadow-xs' 
-                    : 'text-neutral-600 hover:text-neutral-900'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                Tela Cheia
-              </button>
-            </div>
-
-            {/* Container */}
-            <div className={`w-full transition-all duration-300 ${
-              previewDevice === 'mobile' 
-                ? 'max-w-[400px] rounded-[44px] overflow-hidden border-[8px] border-neutral-900 shadow-2xl ring-1 ring-neutral-300 my-auto' 
-                : 'max-w-2xl rounded-3xl overflow-hidden border border-neutral-200 shadow-xl bg-white'
-            }`}>
+          <div 
+            className="w-full min-h-screen flex justify-center selection:bg-pink-500 selection:text-white"
+            style={{
+              background: activeBiosite.themeConfig.bgGradient || activeBiosite.themeConfig.bgColor || '#ffffff',
+            }}
+          >
+            <div className="w-full max-w-lg min-h-screen">
               <BioSiteView biosite={activeBiosite} />
             </div>
           </div>

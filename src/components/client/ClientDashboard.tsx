@@ -274,6 +274,7 @@ const AddressColorPicker: React.FC<{
 
 export const ClientDashboard: React.FC = () => {
   const { 
+    biosites,
     activeBiosite, 
     updateBiosite,
     appointments, 
@@ -1584,13 +1585,39 @@ export const ClientDashboard: React.FC = () => {
           </button>
 
           {/* Abrir Button */}
-          <button
-            onClick={() => setCurrentView('public')}
+          <a
+            href={`/${activeBiosite.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              if (activeBiosite) {
+                localStorage.setItem('biosaas_biosites', JSON.stringify(biosites));
+                localStorage.setItem('biosaas_services', JSON.stringify(services));
+                localStorage.setItem('biosaas_appointments', JSON.stringify(appointments));
+              }
+              if (e.metaKey || e.ctrlKey || e.button === 1) return;
+              try {
+                const url = `/${activeBiosite.slug}`;
+                const win = window.open(url, '_blank');
+                if (!win) {
+                  e.preventDefault();
+                  window.history.pushState({}, '', url);
+                  setCurrentView('public');
+                } else {
+                  e.preventDefault();
+                }
+              } catch {
+                e.preventDefault();
+                window.history.pushState({}, '', `/${activeBiosite.slug}`);
+                setCurrentView('public');
+              }
+            }}
             className="px-3 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+            title={`Abrir mini-site em tempo real (${activeBiosite.slug})`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Abrir</span>
-          </button>
+          </a>
 
           {/* Republicar Button (Lime neon matching screenshots) */}
           <button

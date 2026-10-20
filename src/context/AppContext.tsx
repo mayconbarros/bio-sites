@@ -73,12 +73,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setCurrentView] = useState<AppView>('agency');
-  const [activeBiositeId, setActiveBiositeId] = useState<string>('bio-bella-nails');
-  const [clientActiveTab, setClientActiveTab] = useState<string>('aparencia');
-  const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-
   // Initialize state with LocalStorage if available
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
     const saved = localStorage.getItem('biosaas_biosites');
@@ -109,6 +103,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { ...b, contactButtons: existing };
     });
   });
+
+  // Resolve initial route from URL (e.g. /esmalteriavip or /painel/esmalteriavip)
+  const resolveRoute = (siteList: Biosite[]): { view: AppView; siteId: string } => {
+    if (typeof window === 'undefined') {
+      return { view: 'agency', siteId: siteList[0]?.id || 'bio-bella-nails' };
+    }
+    const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    const searchParams = new URLSearchParams(window.location.search);
+    const siteQuery = searchParams.get('site');
+    const hash = window.location.hash.replace(/^#\/?/, '');
+
+    if (path.startsWith('painel')) {
+      const slug = path.split('/')[1];
+      const match = siteList.find(s => s.slug?.toLowerCase() === slug?.toLowerCase() || s.id?.toLowerCase() === slug?.toLowerCase());
+      return {
+        view: 'client',
+        siteId: match ? match.id : (siteList[0]?.id || 'bio-bella-nails')
+      };
+    }
+
+    const candidate = siteQuery || hash || (path && path !== 'agency' && path !== 'client' && path !== 'index.html' ? path : null);
+    if (candidate) {
+      const match = siteList.find(s => 
+        s.slug?.toLowerCase() === candidate.toLowerCase() || 
+        s.id?.toLowerCase() === candidate.toLowerCase()
+      );
+      if (match) {
+        return {
+          view: 'public',
+          siteId: match.id
+        };
+      }
+    }
+
+    return {
+      view: 'agency',
+      siteId: siteList[0]?.id || 'bio-bella-nails'
+    };
+  };
+
+  const initialRoute = React.useMemo(() => resolveRoute(biosites), []);
+  const [currentView, setCurrentView] = useState<AppView>(initialRoute.view);
+  const [activeBiositeId, setActiveBiositeId] = useState<string>(initialRoute.siteId);
+  const [clientActiveTab, setClientActiveTab] = useState<string>('aparencia');
+  const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   const [services, setServices] = useState<Service[]>(() => {
     const saved = localStorage.getItem('biosaas_services');
@@ -186,6 +226,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('biosaas_events', JSON.stringify(eventCounts));
   }, [eventCounts]);
+
+  // Sync state across browser tabs in real-time and handle browser navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = resolveRoute(biosites);
+      setCurrentView(route.view);
+      setActiveBiositeId(route.siteId);
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'biosaas_biosites' && e.newValue) {
+        try {
+          const updated = JSON.parse(e.newValue);
+          setBiosites(updated);
+        } catch {}
+      }
+      if (e.key === 'biosaas_services' && e.newValue) {
+        try {
+          const updated = JSON.parse(e.newValue);
+          setServices(updated);
+        } catch {}
+      }
+      if (e.key === 'biosaas_creator_profile' && e.newValue) {
+        try {
+          const updated = JSON.parse(e.newValue);
+          setCreatorProfile(updated);
+        } catch {}
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [biosites]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
@@ -420,11 +497,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeBiosite = biosites.find(s => s.id === activeBiositeId) || biosites[0];
 
+  const navigateView = (view: AppView) => {
+    setCurrentView(view);
+    if (typeof window !== 'undefined') {
+      const activeSite = biosites.find(s => s.id === activeBiositeId) || biosites[0];
+      if (view === 'public' && activeSite) {
+        const target = `/${activeSite.slug}`;
+        if (window.location.pathname !== target) {
+          window.history.pushState({}, '', target);
+        }
+      } else if (view === 'agency') {
+        if (window.location.pathname !== '/' && !window.location.pathname.startsWith('/painel')) {
+          window.history.pushState({}, '', '/');
+        }
+      } else if (view === 'client' && activeSite) {
+        const target = `/painel/${activeSite.slug}`;
+        if (window.location.pathname !== target) {
+          window.history.pushState({}, '', target);
+        }
+      }
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
         currentView,
-        setCurrentView,
+        setCurrentView: navigateView,
         agencyActiveTab,
         setAgencyActiveTab,
         creatorProfile,

@@ -31,6 +31,7 @@ interface BioSiteEditorProps {
 
 export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack }) => {
   const { 
+    biosites,
     updateBiosite, 
     services, 
     addService, 
@@ -160,16 +161,38 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
           </button>
 
           {/* Switch to public bio site view */}
-          <button
-            onClick={() => {
-              setActiveBiositeId(biosite.id);
-              setCurrentView('public');
+          <a
+            href={`/${biosite.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              localStorage.setItem('biosaas_biosites', JSON.stringify(biosites));
+              localStorage.setItem('biosaas_services', JSON.stringify(services));
+              if (e.metaKey || e.ctrlKey || e.button === 1) return;
+              try {
+                const url = `/${biosite.slug}`;
+                const win = window.open(url, '_blank');
+                if (!win) {
+                  e.preventDefault();
+                  setActiveBiositeId(biosite.id);
+                  window.history.pushState({}, '', url);
+                  setCurrentView('public');
+                } else {
+                  e.preventDefault();
+                }
+              } catch {
+                e.preventDefault();
+                setActiveBiositeId(biosite.id);
+                window.history.pushState({}, '', `/${biosite.slug}`);
+                setCurrentView('public');
+              }
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold transition shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold transition shadow-xs cursor-pointer"
+            title={`Abrir ${biosite.title} (${biosite.slug})`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Ver Bio Site Completo
-          </button>
+            Abrir Bio Site
+          </a>
         </div>
       </header>
 
