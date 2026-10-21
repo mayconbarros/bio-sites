@@ -98,6 +98,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [copiedPix, setCopiedPix] = useState(false);
   const [copiedWifi, setCopiedWifi] = useState(false);
+  const [wifiModalOpen, setWifiModalOpen] = useState(false);
+  const [copiedNetwork, setCopiedNetwork] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
   const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState<Record<string, number>>({});
@@ -155,8 +158,35 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
 
   const openStatus = getOpenStatus();
 
+  const copyToClipboard = (text: string) => {
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+  };
+
   const handleCopyPix = () => {
-    navigator.clipboard.writeText(biosite.pixConfig.pixKey);
+    copyToClipboard(biosite.pixConfig.pixKey);
     setCopiedPix(true);
     trackEvent(biosite.id, 'pix_copied');
     showToast('Chave Pix copiada com sucesso!');
@@ -164,11 +194,33 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   };
 
   const handleCopyWifi = () => {
-    navigator.clipboard.writeText(biosite.wifiConfig.password);
+    copyToClipboard(biosite.wifiConfig.password);
     setCopiedWifi(true);
     trackEvent(biosite.id, 'wifi_copied');
     showToast('Senha do Wi-Fi copiada!');
     setTimeout(() => setCopiedWifi(false), 2500);
+  };
+
+  const handleCopyNetwork = () => {
+    const net = biosite.wifiConfig?.networkName || '';
+    if (net) {
+      copyToClipboard(net);
+      setCopiedNetwork(true);
+      trackEvent(biosite.id, 'wifi_copied', 'network');
+      showToast('Nome da rede copiado!');
+      setTimeout(() => setCopiedNetwork(false), 2000);
+    }
+  };
+
+  const handleCopyPassword = () => {
+    const pass = biosite.wifiConfig?.password || '';
+    if (pass) {
+      copyToClipboard(pass);
+      setCopiedPassword(true);
+      trackEvent(biosite.id, 'wifi_copied', 'password');
+      showToast('Senha do Wi-Fi copiada!');
+      setTimeout(() => setCopiedPassword(false), 2000);
+    }
   };
 
   const handleOpenBooking = (serviceId?: string) => {
@@ -271,7 +323,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
     if (isPix) {
       const bg = (biosite.pixConfig?.buttonBgColor && biosite.pixConfig.buttonBgColor !== 'padrão') 
         ? biosite.pixConfig.buttonBgColor 
-        : '#e1306c';
+        : '#ff2a85';
       const text = (biosite.pixConfig?.buttonTextColor && biosite.pixConfig.buttonTextColor !== 'padrão') 
         ? biosite.pixConfig.buttonTextColor 
         : '#ffffff';
@@ -280,10 +332,12 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
     if (isWifi) {
       const bg = (biosite.wifiConfig?.buttonBgColor && biosite.wifiConfig.buttonBgColor !== 'padrão') 
         ? biosite.wifiConfig.buttonBgColor 
-        : biosite.themeConfig.cardBg;
+        : ((biosite.pixConfig?.buttonBgColor && biosite.pixConfig.buttonBgColor !== 'padrão') 
+            ? biosite.pixConfig.buttonBgColor 
+            : '#ff2a85');
       const text = (biosite.wifiConfig?.buttonTextColor && biosite.wifiConfig.buttonTextColor !== 'padrão') 
         ? biosite.wifiConfig.buttonTextColor 
-        : biosite.themeConfig.textColor;
+        : '#ffffff';
       return { bg, text };
     }
     if (isWpp) {
@@ -317,17 +371,21 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
     }
     if (isWifi) {
       e.preventDefault();
-      handleCopyWifi();
+      setWifiModalOpen(true);
       return;
     }
   };
 
   // Unified buttons list: always includes special buttons (booking, pix, wifi) if enabled/configured
   const effectiveButtons = React.useMemo(() => {
-    const list = [...(biosite.contactButtons || [])];
-    const hasBooking = list.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking' || (b.label && b.label.toLowerCase().includes('agendar')));
-    const hasPix = list.some(b => b.type === 'Pix' || b.id === 'btn-pix' || (b as any).isSpecial === 'pix');
-    const hasWifi = list.some(b => b.type === 'WiFi' || b.id === 'btn-wifi' || (b as any).isSpecial === 'wifi');
+    // Keep user's custom buttons, but isolate pix and wifi buttons so their presence strictly reflects whether their config fields are filled
+    const baseList = (biosite.contactButtons || []).filter(b => 
+      b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' &&
+      b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi'
+    );
+    const hasBooking = baseList.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking' || (b.label && b.label.toLowerCase().includes('agendar')));
+
+    const list = [...baseList];
 
     if (!hasBooking) {
       list.push({
@@ -346,7 +404,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         textColor: '#ffffff',
       });
     }
-    if (!hasPix && biosite.pixConfig?.pixKey) {
+
+    const hasPixKey = Boolean(biosite.pixConfig?.pixKey && biosite.pixConfig.pixKey.trim() !== '');
+    if (hasPixKey) {
       list.push({
         id: 'btn-pix',
         label: 'Chave Pix',
@@ -359,14 +419,16 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         isSpecial: 'pix',
         displayMode: 'full_button',
         pulseEffect: false,
-        bgColor: biosite.pixConfig.buttonBgColor || 'padrão',
-        textColor: biosite.pixConfig.buttonTextColor || 'padrão',
+        bgColor: biosite.pixConfig?.buttonBgColor || 'padrão',
+        textColor: biosite.pixConfig?.buttonTextColor || 'padrão',
       });
     }
-    if (!hasWifi && biosite.wifiConfig?.networkName) {
+
+    const hasWifiName = Boolean(biosite.wifiConfig?.networkName && biosite.wifiConfig.networkName.trim() !== '');
+    if (hasWifiName) {
       list.push({
         id: 'btn-wifi',
-        label: `Wi-Fi: ${biosite.wifiConfig.networkName}`,
+        label: 'WIFI',
         icon: 'Wifi',
         lucideIcon: 'Wifi',
         url: '#wifi',
@@ -376,10 +438,11 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
         isSpecial: 'wifi',
         displayMode: 'full_button',
         pulseEffect: false,
-        bgColor: biosite.wifiConfig.buttonBgColor || 'padrão',
-        textColor: biosite.wifiConfig.buttonTextColor || 'padrão',
+        bgColor: biosite.wifiConfig?.buttonBgColor || 'padrão',
+        textColor: biosite.wifiConfig?.buttonTextColor || 'padrão',
       });
     }
+
     return list;
   }, [biosite.contactButtons, biosite.pixConfig, biosite.wifiConfig]);
 
@@ -895,6 +958,95 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* WiFi Information Modal (Strict fidelity to reference print) */}
+      {wifiModalOpen && (
+        <div className={`${isMockupFrame ? 'absolute' : 'fixed'} inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150`}>
+          <div className="w-full max-w-[320px] bg-white rounded-3xl p-6 shadow-2xl relative z-50 text-neutral-900 animate-in zoom-in-95 duration-200">
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setWifiModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
+              aria-label="Fechar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Icon circle */}
+            <div className="w-12 h-12 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-3">
+              <Wifi className="w-6 h-6 text-[#ff2a85]" />
+            </div>
+
+            {/* Title and Subtitle */}
+            <h3 className="text-base font-bold text-neutral-900 text-center">
+              Conectar ao WiFi
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1 text-center">
+              Use os dados abaixo para se conectar.
+            </p>
+
+            {/* REDE card */}
+            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl p-3.5 mt-4 text-left">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                REDE
+              </span>
+              <p className="text-sm font-semibold text-neutral-900 mt-0.5 select-all truncate">
+                {biosite.wifiConfig?.networkName || 'WiFi'}
+              </p>
+            </div>
+
+            {/* SENHA card */}
+            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl p-3.5 mt-2.5 text-left">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                SENHA
+              </span>
+              <p className="text-sm font-semibold text-neutral-900 mt-0.5 select-all font-mono truncate">
+                {biosite.wifiConfig?.password || 'Sem senha'}
+              </p>
+            </div>
+
+            {/* Copy buttons */}
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button
+                type="button"
+                onClick={handleCopyNetwork}
+                className="w-full py-2.5 px-3 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer active:scale-95"
+              >
+                {copiedNetwork ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-neutral-600" />
+                    <span>Rede</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyPassword}
+                className="w-full py-2.5 px-3 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+              >
+                {copiedPassword ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-white" />
+                    <span>Copiada!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-white" />
+                    <span>Senha</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

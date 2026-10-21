@@ -78,23 +78,6 @@ import {
   Gift
 } from 'lucide-react';
 
-const PRESET_BUTTON_COLORS = [
-  { name: 'Preto', hex: '#000000' },
-  { name: 'Branco', hex: '#ffffff' },
-  { name: 'Grafite', hex: '#1e293b' },
-  { name: 'Cinza', hex: '#64748b' },
-  { name: 'Pink Neon', hex: '#ff007f' },
-  { name: 'Rosa Choque', hex: '#ec4899' },
-  { name: 'Roxo', hex: '#8b5cf6' },
-  { name: 'Azul Real', hex: '#2563eb' },
-  { name: 'Ciano', hex: '#06b6d4' },
-  { name: 'WhatsApp Verde', hex: '#25d366' },
-  { name: 'Esmeralda', hex: '#10b981' },
-  { name: 'Amarelo Ouro', hex: '#f59e0b' },
-  { name: 'Laranja', hex: '#f97316' },
-  { name: 'Vermelho', hex: '#ef4444' },
-];
-
 interface ColorPickerFieldProps {
   label: string;
   value: string;
@@ -108,134 +91,56 @@ const ColorPickerField: React.FC<ColorPickerFieldProps> = ({
   onChange,
   defaultPreviewColor = '#000000',
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const isDefault = !value || value === 'padrão';
-  const displayColor = isDefault ? defaultPreviewColor : value;
+  const colorInputRef = React.useRef<HTMLInputElement>(null);
+  const isHex = (str?: string) => Boolean(str && /^#([0-9A-F]{3}){1,2}$/i.test(str));
+  const hexColor = isHex(value) ? value : (isHex(defaultPreviewColor) ? defaultPreviewColor : '#ff2a85');
+  const displayValue = (!value || value === 'padrão') ? hexColor : value;
+
+  const handleOpenPicker = () => {
+    if (colorInputRef.current) {
+      if ('showPicker' in HTMLInputElement.prototype) {
+        try {
+          colorInputRef.current.showPicker();
+          return;
+        } catch {}
+      }
+      colorInputRef.current.click();
+    }
+  };
 
   return (
-    <div className="relative">
+    <div>
       <span className="text-[11px] text-neutral-600 block mb-1 font-medium">{label}</span>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 p-1.5 rounded-xl border border-neutral-300 hover:border-neutral-400 bg-white cursor-pointer transition shadow-2xs group text-left"
-      >
+      <div className="flex items-center gap-2">
         <div 
-          className="w-7 h-7 rounded-lg border border-neutral-300 shrink-0 shadow-2xs relative flex items-center justify-center transition group-hover:scale-105"
-          style={{ backgroundColor: displayColor }}
+          onClick={handleOpenPicker}
+          className="relative w-8 h-8 rounded-lg border border-neutral-300 overflow-hidden shrink-0 shadow-2xs cursor-pointer hover:scale-105 transition"
+          style={{ backgroundColor: hexColor }}
         >
-          {isDefault && (
-            <span className={`text-[9px] font-black uppercase ${displayColor === '#ffffff' ? 'text-black' : 'text-white'}`}>
-              P
-            </span>
-          )}
-        </div>
-        <span className="text-xs font-mono text-neutral-700 truncate flex-1 pl-1">
-          {value || 'padrão'}
-        </span>
-        <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform mr-1 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setIsOpen(false)} 
+          <input
+            ref={colorInputRef}
+            type="color"
+            value={hexColor}
+            onChange={e => onChange(e.target.value)}
+            className="absolute -inset-2 w-12 h-12 cursor-pointer opacity-0"
+            aria-label={label}
           />
-
-          <div className="absolute top-full left-0 mt-1.5 w-64 bg-white border border-neutral-200 rounded-2xl shadow-xl p-3 z-50 animate-in zoom-in-95 duration-150 space-y-3">
-            <div className="flex items-center justify-between pb-1.5 border-b border-neutral-100">
-              <span className="text-xs font-bold text-neutral-800">Escolha uma cor</span>
-              <button 
-                type="button" 
-                onClick={() => setIsOpen(false)}
-                className="text-neutral-400 hover:text-neutral-700 p-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                onChange('padrão');
-                setIsOpen(false);
-              }}
-              className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-between transition cursor-pointer border ${
-                isDefault 
-                  ? 'border-pink-300 bg-pink-50 text-neutral-900 font-bold' 
-                  : 'border-neutral-200 hover:bg-neutral-50 text-neutral-600'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-4 h-4 rounded-md border border-neutral-300 shadow-2xs flex items-center justify-center"
-                  style={{ backgroundColor: defaultPreviewColor }}
-                >
-                  <span className={`text-[7px] font-bold ${defaultPreviewColor === '#ffffff' ? 'text-black' : 'text-white'}`}>P</span>
-                </div>
-                <span>Usar cor padrão</span>
-              </div>
-              {isDefault && <Check className="w-3.5 h-3.5 text-[#ff2a85]" />}
-            </button>
-
-            <div>
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">
-                Cores rápidas
-              </span>
-              <div className="grid grid-cols-7 gap-1.5">
-                {PRESET_BUTTON_COLORS.map(c => {
-                  const isSelected = value.toLowerCase() === c.hex.toLowerCase();
-                  return (
-                    <button
-                      key={c.hex}
-                      type="button"
-                      title={c.name}
-                      onClick={() => {
-                        onChange(c.hex);
-                        setIsOpen(false);
-                      }}
-                      className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer hover:scale-110 shadow-2xs ${
-                        isSelected 
-                          ? 'border-neutral-900 ring-2 ring-pink-500/40 scale-105' 
-                          : 'border-neutral-300 hover:border-neutral-500'
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                    >
-                      {isSelected && (
-                        <Check className={`w-3 h-3 ${c.hex === '#ffffff' ? 'text-black' : 'text-white'}`} />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-neutral-100">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">
-                Cor personalizada
-              </span>
-              <div className="flex items-center gap-2">
-                <div className="relative w-8 h-8 rounded-lg border border-neutral-300 overflow-hidden shrink-0 shadow-2xs">
-                  <input
-                    type="color"
-                    value={!isDefault && value.startsWith('#') ? value : (defaultPreviewColor.startsWith('#') ? defaultPreviewColor : '#000000')}
-                    onChange={e => onChange(e.target.value)}
-                    className="absolute -inset-2 w-12 h-12 cursor-pointer"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={value}
-                  onChange={e => onChange(e.target.value)}
-                  placeholder="#000000"
-                  className="w-full px-2.5 py-1.5 text-xs font-mono uppercase rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-pink-500/20"
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+        </div>
+        <input
+          type="text"
+          value={displayValue}
+          onChange={e => onChange(e.target.value)}
+          placeholder={defaultPreviewColor}
+          className="px-3 py-1.5 text-xs font-mono font-medium rounded-xl border border-neutral-300 w-full focus:outline-none focus:ring-2 focus:ring-pink-500/20 uppercase"
+        />
+        <button
+          type="button"
+          onClick={handleOpenPicker}
+          className="text-xs text-neutral-500 hover:text-neutral-800 font-medium cursor-pointer transition shrink-0 px-1 py-1"
+        >
+          Alterar
+        </button>
+      </div>
     </div>
   );
 };
@@ -714,18 +619,18 @@ export const ClientDashboard: React.FC = () => {
   // Buttons state matching screenshots
   const [buttonsList, setButtonsList] = useState<any[]>(() => {
     const rawButtons = activeBiosite?.contactButtons || [];
-    const existing = rawButtons.map(b => ({
-      ...b,
-      type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
-      displayMode: 'full_button',
-      pulseEffect: b.pulseEffect || false,
-      bgColor: b.bgColor || 'padrão',
-      textColor: b.textColor || 'padrão',
-    }));
+    const existing = rawButtons
+      .filter(b => b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' && b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi')
+      .map(b => ({
+        ...b,
+        type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
+        displayMode: 'full_button',
+        pulseEffect: b.pulseEffect || false,
+        bgColor: b.bgColor || 'padrão',
+        textColor: b.textColor || 'padrão',
+      }));
 
     const hasBooking = existing.some(b => b.id === 'btn-booking' || b.type === 'Agendar' || (b as any).isSpecial === 'booking');
-    const hasPix = existing.some(b => b.id === 'btn-pix' || b.type === 'Pix' || (b as any).isSpecial === 'pix');
-    const hasWifi = existing.some(b => b.id === 'btn-wifi' || b.type === 'WiFi' || (b as any).isSpecial === 'wifi');
 
     const fullList = [...existing];
     if (!hasBooking) {
@@ -743,40 +648,6 @@ export const ClientDashboard: React.FC = () => {
         pulseEffect: false,
         bgColor: 'padrão',
         textColor: 'padrão',
-      });
-    }
-    if (!hasPix && activeBiosite?.pixConfig?.pixKey) {
-      fullList.push({
-        id: 'btn-pix',
-        label: 'Chave Pix',
-        icon: 'QrCode',
-        lucideIcon: 'QrCode',
-        url: '#pix',
-        isWhatsApp: false,
-        type: 'Pix',
-        isSpecial: 'pix',
-        active: true,
-        displayMode: 'full_button',
-        pulseEffect: false,
-        bgColor: activeBiosite.pixConfig.buttonBgColor || 'padrão',
-        textColor: activeBiosite.pixConfig.buttonTextColor || 'padrão',
-      });
-    }
-    if (!hasWifi && activeBiosite?.wifiConfig?.networkName) {
-      fullList.push({
-        id: 'btn-wifi',
-        label: `Wi-Fi: ${activeBiosite.wifiConfig.networkName}`,
-        icon: 'Wifi',
-        lucideIcon: 'Wifi',
-        url: '#wifi',
-        isWhatsApp: false,
-        type: 'WiFi',
-        isSpecial: 'wifi',
-        active: true,
-        displayMode: 'full_button',
-        pulseEffect: false,
-        bgColor: activeBiosite.wifiConfig.buttonBgColor || 'padrão',
-        textColor: activeBiosite.wifiConfig.buttonTextColor || 'padrão',
       });
     }
     return fullList;
@@ -3273,7 +3144,7 @@ export const ClientDashboard: React.FC = () => {
                             setWifiForm(p => ({ ...p, buttonBgColor: val }));
                             setHasUnsavedButtonChanges(true);
                           }}
-                          defaultPreviewColor="#2563eb"
+                          defaultPreviewColor="#ff2a85"
                         />
                         <ColorPickerField
                           label="Texto do botão"
