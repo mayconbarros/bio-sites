@@ -965,56 +965,56 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
       {/* WiFi Information Modal (Strict fidelity to reference print) */}
       {wifiModalOpen && (
         <div className={`${isMockupFrame ? 'absolute' : 'fixed'} inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150`}>
-          <div className="w-full max-w-[320px] bg-white rounded-3xl p-6 shadow-2xl relative z-50 text-neutral-900 animate-in zoom-in-95 duration-200">
+          <div className="w-[calc(100%-1.5rem)] max-w-[350px] sm:max-w-[360px] bg-white rounded-3xl px-5 py-4 shadow-2xl relative z-50 text-neutral-900 animate-in zoom-in-95 duration-200">
             {/* Close button */}
             <button
               type="button"
               onClick={() => setWifiModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
+              className="absolute top-3 right-3 p-1.5 text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
               aria-label="Fechar"
             >
               <X className="w-4 h-4" />
             </button>
 
             {/* Icon circle */}
-            <div className="w-12 h-12 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-3">
-              <Wifi className="w-6 h-6 text-[#ff2a85]" />
+            <div className="w-10 h-10 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-1.5">
+              <Wifi className="w-5 h-5 text-[#ff2a85]" />
             </div>
 
             {/* Title and Subtitle */}
-            <h3 className="text-base font-bold text-neutral-900 text-center">
+            <h3 className="text-sm font-bold text-neutral-900 text-center leading-tight">
               Conectar ao WiFi
             </h3>
-            <p className="text-xs text-neutral-500 mt-1 text-center">
+            <p className="text-[11px] text-neutral-500 mt-0.5 text-center leading-tight">
               Use os dados abaixo para se conectar.
             </p>
 
             {/* REDE card */}
-            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl p-3.5 mt-4 text-left">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl px-3.5 py-2 mt-2.5 text-left">
+              <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block leading-none">
                 REDE
               </span>
-              <p className="text-sm font-semibold text-neutral-900 mt-0.5 select-all truncate">
+              <p className="text-xs sm:text-sm font-semibold text-neutral-900 mt-1 leading-tight select-all truncate">
                 {biosite.wifiConfig?.networkName || 'WiFi'}
               </p>
             </div>
 
             {/* SENHA card */}
-            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl p-3.5 mt-2.5 text-left">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            <div className="bg-neutral-50/90 border border-neutral-100 rounded-2xl px-3.5 py-2 mt-2 text-left">
+              <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block leading-none">
                 SENHA
               </span>
-              <p className="text-sm font-semibold text-neutral-900 mt-0.5 select-all font-mono truncate">
+              <p className="text-xs sm:text-sm font-semibold text-neutral-900 mt-1 leading-tight select-all font-mono truncate">
                 {biosite.wifiConfig?.password || 'Sem senha'}
               </p>
             </div>
 
             {/* Copy buttons */}
-            <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="grid grid-cols-2 gap-2 mt-2.5">
               <button
                 type="button"
                 onClick={handleCopyNetwork}
-                className="w-full py-2.5 px-3 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer active:scale-95"
+                className="w-full py-2 px-2.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer active:scale-95"
               >
                 {copiedNetwork ? (
                   <>
@@ -1032,7 +1032,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
               <button
                 type="button"
                 onClick={handleCopyPassword}
-                className="w-full py-2.5 px-3 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                className="w-full py-2 px-2.5 rounded-xl bg-[#ff2a85] hover:bg-[#e61772] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
               >
                 {copiedPassword ? (
                   <>
