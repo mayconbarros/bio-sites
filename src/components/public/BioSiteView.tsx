@@ -94,6 +94,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   }, [isMockupFrame, biosite?.title, biosite?.subtitle]);
 
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingAccordionOpen, setBookingAccordionOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [copiedPix, setCopiedPix] = useState(false);
@@ -104,6 +105,23 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState<Record<string, number>>({});
+
+  // Mobile screen detection (matches cellphones < 768px or mockup frame)
+  const [isMobileScreen, setIsMobileScreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const isMobile = isMockupFrame || isMobileScreen;
   
   // Pix Modal state (1 = Form, 2 = QR Code)
   const [pixModalOpen, setPixModalOpen] = useState(false);
@@ -131,6 +149,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   };
 
   const biositeServices = services.filter(s => s.biositeId === biosite.id && s.active);
+
 
   // Categories list
   const categories = ['todos', ...Array.from(new Set(biositeServices.map(s => s.category)))];
@@ -231,7 +250,11 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
       setSelectedServiceId(null);
     }
     trackEvent(biosite.id, 'booking_start');
-    setBookingOpen(true);
+    if (isMobile) {
+      setBookingAccordionOpen(true);
+    } else {
+      setBookingOpen(true);
+    }
   };
 
   const nextImage = (serviceId: string, max: number, e: React.MouseEvent) => {
@@ -360,7 +383,11 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
 
     if (isBooking) {
       e.preventDefault();
-      handleOpenBooking();
+      if (isMobile) {
+        setBookingAccordionOpen(prev => !prev);
+      } else {
+        handleOpenBooking();
+      }
       return;
     }
     if (isPix) {
@@ -619,6 +646,8 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
               const isLast = index === arr.length - 1;
               const colors = getButtonColors(btn);
               const href = getButtonHref(btn);
+              const isBooking = btn.type === 'Agendar' || btn.id === 'btn-booking' || btn.isSpecial === 'booking' || (btn.label && btn.label.toLowerCase().includes('agendar'));
+              const isAccordionActive = isBooking && isMobile && bookingAccordionOpen;
 
               return (
                 <div key={btn.id} className="relative group">
@@ -627,7 +656,11 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
                     target={href.startsWith('http') ? '_blank' : undefined}
                     rel={href.startsWith('http') ? 'noreferrer' : undefined}
                     onClick={(e) => handleButtonClick(btn, e)}
-                    className={`w-full py-3.5 px-4 flex items-center justify-between transition font-bold text-sm border shadow-sm ${getButtonClass()} ${
+                    className={`w-full py-3.5 px-4 flex items-center justify-between transition font-bold text-sm border shadow-sm ${
+                      isAccordionActive 
+                        ? 'rounded-t-2xl rounded-b-none border-b-0' 
+                        : getButtonClass()
+                    } ${
                       btn.pulseEffect ? 'animate-pulse' : ''
                     } hover:brightness-105 active:scale-[0.99] cursor-pointer`}
                     style={{
@@ -640,12 +673,33 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
                       {renderButtonIcon(btn)}
                       <span>{btn.label}</span>
                     </div>
-                    <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
+                    {isBooking && isMobile ? (
+                      bookingAccordionOpen ? (
+                        <ChevronUp className="w-4 h-4 opacity-90 transition" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 opacity-80 group-hover:translate-y-0.5 transition" />
+                      )
+                    ) : (
+                      <ChevronRight className="w-4 h-4 opacity-80 group-hover:translate-x-1 transition" />
+                    )}
                   </a>
+
+                  {/* Accordion content on mobile matching reference print */}
+                  {isAccordionActive && (
+                    <div className="w-full bg-white border border-t-0 border-neutral-200 rounded-b-2xl p-4 shadow-xs animate-in slide-in-from-top-1 duration-150 text-neutral-900">
+                      <BookingModal
+                        biosite={biosite}
+                        services={biositeServices}
+                        isOpen={true}
+                        inline={true}
+                        onClose={() => setBookingAccordionOpen(false)}
+                      />
+                    </div>
+                  )}
 
                   {/* Hover Quick Reorder Arrows - Unified for ALL buttons */}
                   {onMoveButton && (
-                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 backdrop-blur-xs p-1 rounded-lg border border-white/20 shadow-lg pointer-events-auto">
+                    <div className={`absolute right-2.5 ${isAccordionActive ? 'top-6' : 'top-1/2'} -translate-y-1/2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 backdrop-blur-xs p-1 rounded-lg border border-white/20 shadow-lg pointer-events-auto`}>
                       <button
                         type="button"
                         disabled={isFirst}
@@ -797,14 +851,16 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
 
       </div>
 
-      {/* Booking Modal */}
-      <BookingModal
-        biosite={biosite}
-        services={biositeServices}
-        preselectedServiceId={selectedServiceId}
-        isOpen={bookingOpen}
-        onClose={() => setBookingOpen(false)}
-      />
+      {/* Booking Modal (Only on desktop/non-mobile) */}
+      {!isMobile && (
+        <BookingModal
+          biosite={biosite}
+          services={biositeServices}
+          preselectedServiceId={selectedServiceId}
+          isOpen={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+        />
+      )}
 
       {/* Pix Payment Modal (Strict fidelity to reference prints) */}
       {pixModalOpen && (

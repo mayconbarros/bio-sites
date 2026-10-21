@@ -17,6 +17,7 @@ interface BookingModalProps {
   preselectedServiceId?: string | null;
   isOpen: boolean;
   onClose: () => void;
+  inline?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -98,6 +99,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   preselectedServiceId,
   isOpen,
   onClose,
+  inline = false,
 }) => {
   const { addAppointment, trackEvent } = useApp();
 
@@ -362,11 +364,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setStep(5);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="w-full max-w-[360px] sm:max-w-[420px] bg-white rounded-3xl p-5 sm:p-6 shadow-2xl relative border border-neutral-100 text-neutral-900 animate-in zoom-in-95 duration-200">
-        
-        {/* Header matching all reference prints */}
+  const modalBody = (
+    <>
+      {/* Header matching all reference prints (hidden in inline accordion) */}
+      {!inline && (
         <div className="flex items-center justify-between pb-3">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-5 h-5 text-neutral-900 stroke-[2]" />
@@ -383,48 +384,49 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <X className="w-3.5 h-3.5 stroke-[2.5]" />
           </button>
         </div>
+      )}
 
-        {/* STEP 1: Escolha o serviço (Print 2) */}
-        {step === 1 && (
-          <div className="space-y-3 pt-1">
-            <span className="text-xs text-neutral-800 font-semibold block">
-              Escolha o serviço
-            </span>
+      {/* STEP 1: Escolha o serviço (Print 2 & Accordion print) */}
+      {step === 1 && (
+        <div className="space-y-3 pt-1">
+          <span className="text-xs sm:text-sm text-neutral-800 font-medium block text-left">
+            Escolha o serviço:
+          </span>
 
-            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-              {activeServices.map(srv => {
-                const priceFormatted = safePriceDisplay(srv.price);
-                const showPrice = hasValidPrice(srv.price);
+          <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+            {activeServices.map(srv => {
+              const priceFormatted = safePriceDisplay(srv.price);
+              const showPrice = hasValidPrice(srv.price);
 
-                return (
-                  <button
-                    key={srv.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedService(srv);
-                      setStep(2);
-                    }}
-                    className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-400 bg-white transition cursor-pointer shadow-2xs group"
-                  >
-                    <h4 className="text-xs sm:text-sm font-semibold text-neutral-900 group-hover:text-black">
-                      {srv.name}
-                    </h4>
-                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-neutral-500 mt-1">
-                      <Clock className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>{srv.durationMinutes || 60} min</span>
-                      {showPrice && (
-                        <>
-                          <span>•</span>
-                          <span>R$ {priceFormatted}</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+              return (
+                <button
+                  key={srv.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedService(srv);
+                    setStep(2);
+                  }}
+                  className="w-full text-left p-3.5 sm:p-4 rounded-xl border border-neutral-200 hover:border-neutral-300 bg-white transition cursor-pointer shadow-2xs group flex flex-col justify-center"
+                >
+                  <h4 className="text-xs sm:text-sm font-semibold text-neutral-900 group-hover:text-black">
+                    {srv.name}
+                  </h4>
+                  <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-neutral-500 mt-1">
+                    <Clock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    <span>{srv.durationMinutes || 60} min</span>
+                    {showPrice && (
+                      <>
+                        <span>·</span>
+                        <span>R$ {priceFormatted}</span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
+      )}
 
         {/* STEP 2: Escolha o dia (Print 3) */}
         {step === 2 && (
@@ -694,7 +696,21 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
           </div>
         )}
+    </>
+  );
 
+  if (inline) {
+    return (
+      <div className="w-full text-neutral-900">
+        {modalBody}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-[360px] sm:max-w-[420px] bg-white rounded-3xl p-5 sm:p-6 shadow-2xl relative border border-neutral-100 text-neutral-900 animate-in zoom-in-95 duration-200">
+        {modalBody}
       </div>
     </div>
   );
