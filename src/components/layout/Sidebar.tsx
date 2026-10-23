@@ -15,7 +15,9 @@ export const Sidebar: React.FC = () => {
     agencyActiveTab,
     setAgencyActiveTab,
     biosites, 
-    showToast
+    showToast,
+    logout,
+    currentUser
   } = useApp();
 
   return (
@@ -106,11 +108,27 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Rodapé apenas com botão de "Sair" */}
-      <div className="p-4 border-t border-neutral-100">
+      {/* Rodapé com perfil do usuário e botão de Sair */}
+      <div className="p-4 border-t border-neutral-100 space-y-3">
+        <div className="flex items-center gap-2.5 px-2">
+          <div className="w-8 h-8 rounded-full bg-[#ff2a85]/10 text-[#ff2a85] font-bold text-xs flex items-center justify-center shrink-0 border border-[#ff2a85]/20 shadow-2xs">
+            MB
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-neutral-900 block truncate">
+              {currentUser?.name || 'Maycon Barros'}
+            </span>
+            <span className="text-[10px] text-neutral-500 block truncate">
+              {currentUser?.email || 'mayconconsultoria@gmail.com'}
+            </span>
+          </div>
+        </div>
+
         <button
           type="button"
-          onClick={() => showToast('Sessão encerrada com segurança!', 'info')}
+          onClick={() => {
+            logout();
+          }}
           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
         >
           <LogOut className="w-4 h-4" />

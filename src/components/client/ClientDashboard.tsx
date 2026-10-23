@@ -194,6 +194,7 @@ export const ClientDashboard: React.FC = () => {
     getBiositeStats,
     clientActiveTab,
     setClientActiveTab,
+    logout,
   } = useApp();
 
   const selectedTab = clientActiveTab || 'aparencia';
@@ -1402,7 +1403,13 @@ export const ClientDashboard: React.FC = () => {
           </button>
           <button 
             onClick={() => setCurrentView('agency')} 
-            className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer"
+            className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer text-xs"
+          >
+            <span>Meus sites</span>
+          </button>
+          <button 
+            onClick={() => logout()} 
+            className="flex items-center gap-1.5 hover:text-red-600 transition cursor-pointer text-xs"
           >
             <LogOut className="w-3.5 h-3.5 text-neutral-500" />
             <span>Sair</span>
@@ -1501,8 +1508,9 @@ export const ClientDashboard: React.FC = () => {
 
           {/* Sair Button */}
           <button
-            onClick={() => setCurrentView('agency')}
-            className="px-2.5 py-1.5 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+            onClick={() => logout()}
+            className="px-2.5 py-1.5 rounded-lg text-neutral-600 hover:text-red-600 hover:bg-red-50 text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+            title="Encerrar sessão"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sair</span>

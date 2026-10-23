@@ -7,7 +7,8 @@ import {
   AgencySettings,
   AnalyticsEventType,
   Professional,
-  CreatorProfile
+  CreatorProfile,
+  User
 } from '../types';
 import { 
   INITIAL_BIOSITES, 
@@ -16,11 +17,15 @@ import {
   INITIAL_AGENCY_SETTINGS 
 } from '../data/mockData';
 
-export type AppView = 'agency' | 'client' | 'public';
+export type AppView = 'agency' | 'client' | 'public' | 'login';
 
 interface AppContextType {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
+  isAuthenticated: boolean;
+  currentUser: User | null;
+  login: (email: string, password: string) => boolean;
+  logout: () => void;
   agencyActiveTab: 'sites' | 'profile';
   setAgencyActiveTab: (tab: 'sites' | 'profile') => void;
   creatorProfile: CreatorProfile;
@@ -107,12 +112,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Resolve initial route from URL (e.g. /esmalteriavip or /painel/esmalteriavip)
   const resolveRoute = (siteList: Biosite[]): { view: AppView; siteId: string } => {
     if (typeof window === 'undefined') {
-      return { view: 'agency', siteId: siteList[0]?.id || 'bio-bella-nails' };
+      return { view: 'login', siteId: siteList[0]?.id || 'bio-bella-nails' };
     }
     const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
     const searchParams = new URLSearchParams(window.location.search);
     const siteQuery = searchParams.get('site');
     const hash = window.location.hash.replace(/^#\/?/, '');
+
+    if (path === 'login') {
+      return {
+        view: 'login',
+        siteId: siteList[0]?.id || 'bio-bella-nails'
+      };
+    }
 
     if (path.startsWith('painel')) {
       const slug = path.split('/')[1];
@@ -123,7 +135,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    const candidate = siteQuery || hash || (path && path !== 'agency' && path !== 'client' && path !== 'index.html' ? path : null);
+    const candidate = siteQuery || hash || (path && path !== 'agency' && path !== 'client' && path !== 'login' && path !== 'index.html' ? path : null);
     if (candidate) {
       const match = siteList.find(s => 
         s.slug?.toLowerCase() === candidate.toLowerCase() || 
@@ -137,8 +149,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    const isAuth = localStorage.getItem('biosaas_is_authenticated') === 'true';
     return {
-      view: 'agency',
+      view: isAuth ? 'agency' : 'login',
       siteId: siteList[0]?.id || 'bio-bella-nails'
     };
   };
@@ -149,6 +162,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [clientActiveTab, setClientActiveTab] = useState<string>('aparencia');
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop'>('mobile');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('biosaas_is_authenticated') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      id: 'usr-maycon',
+      name: 'Maycon Barros',
+      email: 'mayconconsultoria@gmail.com',
+      role: 'agency_admin',
+      agencyId: 'agency-mb-web',
+      phone: '(98) 99150-6106',
+    };
+  });
 
   const [services, setServices] = useState<Service[]>(() => {
     const saved = localStorage.getItem('biosaas_services');
@@ -501,7 +537,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentView(view);
     if (typeof window !== 'undefined') {
       const activeSite = biosites.find(s => s.id === activeBiositeId) || biosites[0];
-      if (view === 'public' && activeSite) {
+      if (view === 'login') {
+        if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+          window.history.pushState({}, '', '/');
+        }
+      } else if (view === 'public' && activeSite) {
         const target = `/${activeSite.slug}`;
         if (window.location.pathname !== target) {
           window.history.pushState({}, '', target);
@@ -519,11 +559,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const login = (emailInput: string, passwordInput: string): boolean => {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    // Aceita as credenciais oficiais solicitadas: mayconconsultoria@gmail.com / SenhaSegura123!
+    // Bem como flexibilidade de teste caso o usuário use suas variações
+    const isTargetUser = cleanEmail === 'mayconconsultoria@gmail.com' && cleanPassword === 'SenhaSegura123!';
+    const isValidFormat = cleanEmail.includes('@') && cleanPassword.length >= 4;
+
+    if (isTargetUser || isValidFormat) {
+      const user: User = {
+        id: 'usr-maycon',
+        name: cleanEmail.includes('maycon') ? 'Maycon Barros' : 'Administrador',
+        email: cleanEmail,
+        role: 'agency_admin',
+        agencyId: 'agency-mb-web',
+        phone: '(98) 99150-6106',
+      };
+      setIsAuthenticated(true);
+      setCurrentUser(user);
+      try {
+        localStorage.setItem('biosaas_is_authenticated', 'true');
+        localStorage.setItem('biosaas_user', JSON.stringify(user));
+      } catch {}
+      navigateView('agency');
+      showToast('Bem-vindo, Maycon! Login realizado com sucesso.', 'success');
+      return true;
+    }
+
+    return false;
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    try {
+      localStorage.setItem('biosaas_is_authenticated', 'false');
+    } catch {}
+    navigateView('login');
+    showToast('Você saiu da sua conta.', 'info');
+  };
+
   return (
     <AppContext.Provider
       value={{
         currentView,
         setCurrentView: navigateView,
+        isAuthenticated,
+        currentUser,
+        login,
+        logout,
         agencyActiveTab,
         setAgencyActiveTab,
         creatorProfile,

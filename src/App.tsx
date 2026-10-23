@@ -9,10 +9,40 @@ import { Sidebar } from './components/layout/Sidebar';
 import { AgencyDashboard } from './components/agency/AgencyDashboard';
 import { ClientDashboard } from './components/client/ClientDashboard';
 import { BioSiteView } from './components/public/BioSiteView';
+import { LoginPage } from './components/auth/LoginPage';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 function AppContent() {
   const { currentView, activeBiosite, toast } = useApp();
+
+  if (currentView === 'login') {
+    return (
+      <>
+        <LoginPage />
+        {/* Toast Notification Container */}
+        {toast && (
+          <div className="fixed bottom-5 right-5 z-50 animate-in slide-in-from-bottom-5 duration-200">
+            <div className={`px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border backdrop-blur-md ${
+              toast.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : toast.type === 'info'
+                  ? 'bg-blue-50 border-blue-200 text-blue-800'
+                  : 'bg-white border-emerald-300 text-emerald-800 shadow-emerald-500/10'
+            }`}>
+              {toast.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-red-500" />
+              ) : toast.type === 'info' ? (
+                <Info className="w-4 h-4 text-blue-500" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              )}
+              <span>{toast.message}</span>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div 
