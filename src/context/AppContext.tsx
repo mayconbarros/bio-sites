@@ -8,7 +8,8 @@ import {
   AnalyticsEventType,
   Professional,
   CreatorProfile,
-  User
+  User,
+  ClientUser
 } from '../types';
 import { 
   INITIAL_BIOSITES, 
@@ -16,6 +17,7 @@ import {
   INITIAL_APPOINTMENTS, 
   INITIAL_AGENCY_SETTINGS 
 } from '../data/mockData';
+import { INITIAL_CLIENTS } from '../data/rbacConstants';
 
 export type AppView = 'agency' | 'client' | 'public' | 'login';
 
@@ -24,10 +26,17 @@ interface AppContextType {
   setCurrentView: (view: AppView) => void;
   isAuthenticated: boolean;
   currentUser: User | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
   login: (email: string, password: string) => boolean;
   logout: () => void;
-  agencyActiveTab: 'sites' | 'profile';
-  setAgencyActiveTab: (tab: 'sites' | 'profile') => void;
+  switchUserRole: (role: 'admin' | 'client', clientUser?: ClientUser) => void;
+  changePassword: (currentPassword: string, newPassword: string) => { success: boolean; message: string };
+  agencyActiveTab: 'sites' | 'clients' | 'profile';
+  setAgencyActiveTab: (tab: 'sites' | 'clients' | 'profile') => void;
+  clients: ClientUser[];
+  addClient: (data: Omit<ClientUser, 'id' | 'createdAt'>) => ClientUser;
+  updateClient: (id: string, data: Partial<ClientUser>) => void;
+  deleteClient: (id: string) => void;
   creatorProfile: CreatorProfile;
   updateCreatorProfile: (profile: Partial<CreatorProfile>) => void;
   activeBiositeId: string;
@@ -180,11 +189,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: 'usr-maycon',
       name: 'Maycon Barros',
       email: 'mayconconsultoria@gmail.com',
-      role: 'agency_admin',
+      role: 'admin',
       agencyId: 'agency-mb-web',
       phone: '(98) 99150-6106',
     };
   });
+
+  const [clients, setClients] = useState<ClientUser[]>(() => {
+    try {
+      const saved = localStorage.getItem('biosaas_clients');
+      return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+    } catch {
+      return INITIAL_CLIENTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('biosaas_clients', JSON.stringify(clients));
+    } catch {}
+  }, [clients]);
+
+  const addClient = (data: Omit<ClientUser, 'id' | 'createdAt'>): ClientUser => {
+    const newClient: ClientUser = {
+      ...data,
+      id: `client-${Date.now()}`,
+      createdAt: new Date().toLocaleDateString('pt-BR'),
+      role: 'client',
+    };
+    setClients(prev => [newClient, ...prev]);
+    showToast(`Cliente "${newClient.name}" cadastrado com sucesso!`, 'success');
+    return newClient;
+  };
+
+  const updateClient = (id: string, data: Partial<ClientUser>) => {
+    setClients(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    showToast('Dados do cliente atualizados!', 'success');
+  };
+
+  const deleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    showToast('Cliente removido com sucesso!', 'info');
+  };
 
   const [services, setServices] = useState<Service[]>(() => {
     const saved = localStorage.getItem('biosaas_services');
@@ -202,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
   });
 
-  const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'profile'>('sites');
+  const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'clients' | 'profile'>('sites');
 
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile>(() => {
     try {
@@ -563,17 +609,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
 
-    // Aceita as credenciais oficiais solicitadas: mayconconsultoria@gmail.com / SenhaSegura123!
-    // Bem como flexibilidade de teste caso o usuário use suas variações
-    const isTargetUser = cleanEmail === 'mayconconsultoria@gmail.com' && cleanPassword === 'SenhaSegura123!';
+    // 1. Verifica se é um Cliente cadastrado
+    const clientMatch = clients.find(c => c.email.toLowerCase() === cleanEmail);
+    if (clientMatch) {
+      if (clientMatch.status === 'blocked') {
+        showToast('Esta conta de cliente está bloqueada. Contate o administrador.', 'error');
+        return false;
+      }
+      const user: User = {
+        id: clientMatch.id,
+        name: clientMatch.name,
+        email: clientMatch.email,
+        phone: clientMatch.phone,
+        role: 'client',
+        assignedBiositeIds: clientMatch.assignedBiositeIds,
+        permissions: clientMatch.permissions,
+        mustChangePassword: clientMatch.mustChangePassword,
+        temporaryPassword: clientMatch.temporaryPassword,
+      };
+      setIsAuthenticated(true);
+      setCurrentUser(user);
+      if (clientMatch.assignedBiositeIds?.[0]) {
+        setActiveBiositeId(clientMatch.assignedBiositeIds[0]);
+      }
+      try {
+        localStorage.setItem('biosaas_is_authenticated', 'true');
+        localStorage.setItem('biosaas_user', JSON.stringify(user));
+      } catch {}
+      navigateView('client');
+      showToast(`Bem-vindo, ${clientMatch.name}! Painel do cliente ativo.`, 'success');
+      return true;
+    }
+
+    // 2. Aceita credenciais de Administrador (padrão mayconconsultoria@gmail.com / SenhaSegura123!)
+    const isTargetAdmin = cleanEmail === 'mayconconsultoria@gmail.com' && cleanPassword === 'SenhaSegura123!';
     const isValidFormat = cleanEmail.includes('@') && cleanPassword.length >= 4;
 
-    if (isTargetUser || isValidFormat) {
+    if (isTargetAdmin || isValidFormat) {
       const user: User = {
         id: 'usr-maycon',
-        name: cleanEmail.includes('maycon') ? 'Maycon Barros' : 'Administrador',
+        name: cleanEmail.includes('maycon') ? 'Maycon Barros (Admin)' : 'Administrador',
         email: cleanEmail,
-        role: 'agency_admin',
+        role: 'admin',
         agencyId: 'agency-mb-web',
         phone: '(98) 99150-6106',
       };
@@ -584,7 +661,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem('biosaas_user', JSON.stringify(user));
       } catch {}
       navigateView('agency');
-      showToast('Bem-vindo, Maycon! Login realizado com sucesso.', 'success');
+      showToast('Bem-vindo, Administrador! Acesso total concedido.', 'success');
       return true;
     }
 
@@ -600,6 +677,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Você saiu da sua conta.', 'info');
   };
 
+  const switchUserRole = (role: 'admin' | 'client', clientUser?: ClientUser) => {
+    if (role === 'admin') {
+      const adminUser: User = {
+        id: 'usr-maycon',
+        name: 'Maycon Barros (Admin)',
+        email: 'mayconconsultoria@gmail.com',
+        role: 'admin',
+        agencyId: 'agency-mb-web',
+        phone: '(98) 99150-6106',
+      };
+      setCurrentUser(adminUser);
+      setIsAuthenticated(true);
+      try {
+        localStorage.setItem('biosaas_user', JSON.stringify(adminUser));
+      } catch {}
+      navigateView('agency');
+      setAgencyActiveTab('sites');
+      showToast('Visão de Administrador ativada (Acesso Total).', 'info');
+    } else {
+      const targetClient = clientUser || clients[0] || INITIAL_CLIENTS[0];
+      const clientAuth: User = {
+        id: targetClient.id,
+        name: targetClient.name,
+        email: targetClient.email,
+        phone: targetClient.phone,
+        role: 'client',
+        assignedBiositeIds: targetClient.assignedBiositeIds,
+        permissions: targetClient.permissions,
+        mustChangePassword: targetClient.mustChangePassword,
+        temporaryPassword: targetClient.temporaryPassword,
+      };
+      setCurrentUser(clientAuth);
+      setIsAuthenticated(true);
+      if (targetClient.assignedBiositeIds?.[0]) {
+        setActiveBiositeId(targetClient.assignedBiositeIds[0]);
+      }
+      try {
+        localStorage.setItem('biosaas_user', JSON.stringify(clientAuth));
+      } catch {}
+      navigateView('client');
+      showToast(`Simulando visão do Cliente: ${targetClient.name}`, 'info');
+    }
+  };
+
+  const changePassword = (currentPassword: string, newPassword: string): { success: boolean; message: string } => {
+    if (!currentUser) return { success: false, message: 'Usuário não autenticado.' };
+
+    if (currentUser.temporaryPassword && currentPassword !== currentUser.temporaryPassword) {
+      return { success: false, message: 'A senha atual informada está incorreta.' };
+    }
+
+    if (newPassword.length < 6) {
+      return { success: false, message: 'A nova senha deve ter no mínimo 6 caracteres.' };
+    }
+
+    const updatedUser: User = {
+      ...currentUser,
+      mustChangePassword: false,
+      temporaryPassword: newPassword,
+    };
+    setCurrentUser(updatedUser);
+
+    setClients(prev => prev.map(c => (c.id === currentUser.id || c.email === currentUser.email) ? {
+      ...c,
+      mustChangePassword: false,
+      temporaryPassword: newPassword,
+    } : c));
+
+    try {
+      localStorage.setItem('biosaas_user', JSON.stringify(updatedUser));
+    } catch {}
+
+    showToast('Senha alterada com sucesso! Acesso liberado.', 'success');
+    return { success: true, message: 'Senha atualizada com sucesso!' };
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -607,10 +760,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView: navigateView,
         isAuthenticated,
         currentUser,
+        setCurrentUser,
         login,
         logout,
+        switchUserRole,
+        changePassword,
         agencyActiveTab,
         setAgencyActiveTab,
+        clients,
+        addClient,
+        updateClient,
+        deleteClient,
         creatorProfile,
         updateCreatorProfile,
         activeBiositeId,

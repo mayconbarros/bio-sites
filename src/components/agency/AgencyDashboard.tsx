@@ -12,6 +12,7 @@ import {
 import emptyStateIllustration from '../../assets/images/empty_state_illustration_1791938807425.jpg';
 import { EMPTY_STATE_ILLUSTRATION_BASE64 } from '../../assets/images/emptyStateIllustrationBase64';
 import { CreatorProfilePage } from './CreatorProfilePage';
+import { ClientManagementPage } from './ClientManagementPage';
 
 export const AgencyDashboard: React.FC = () => {
   const { 
@@ -112,6 +113,11 @@ export const AgencyDashboard: React.FC = () => {
   // Profile page tab
   if (agencyActiveTab === 'profile') {
     return <CreatorProfilePage />;
+  }
+
+  // Clients management page tab
+  if (agencyActiveTab === 'clients') {
+    return <ClientManagementPage />;
   }
 
   return (

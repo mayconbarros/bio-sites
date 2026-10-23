@@ -64,7 +64,7 @@ const CATEGORIES = [
 const ALL_ITEMS = CATEGORIES.flatMap(cat => cat.items);
 
 export const AcessoClienteTab: React.FC = () => {
-  const { activeBiosite } = useApp();
+  const { activeBiosite, clients, addClient, updateClient } = useApp();
 
   const [email, setEmail] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
@@ -166,7 +166,7 @@ export const AcessoClienteTab: React.FC = () => {
       return;
     }
 
-    // Atualiza ou insere novo acesso
+    // Atualiza ou insere novo acesso no histórico local
     const existingIndex = grantedList.findIndex(g => g.email.toLowerCase() === cleanEmail);
     let updated: GrantedAccess[];
 
@@ -187,6 +187,33 @@ export const AcessoClienteTab: React.FC = () => {
       };
       updated = [newAccess, ...grantedList];
       showToast(`Acesso liberado com sucesso para ${cleanEmail}!`);
+    }
+
+    // Sincroniza com o estado global de Gestão de Clientes
+    const matchedClient = clients.find(c => c.email.toLowerCase() === cleanEmail);
+    if (matchedClient) {
+      const currentAssigned = matchedClient.assignedBiositeIds || [];
+      const siteId = activeBiosite?.id;
+      const newAssigned = siteId && !currentAssigned.includes(siteId) 
+        ? [...currentAssigned, siteId] 
+        : currentAssigned;
+      updateClient(matchedClient.id, {
+        permissions: Array.from(new Set([...matchedClient.permissions, ...selectedPermissions])),
+        assignedBiositeIds: newAssigned,
+        status: 'active'
+      });
+    } else {
+      const inferredName = cleanEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      addClient({
+        name: inferredName || 'Novo Cliente',
+        email: cleanEmail,
+        role: 'client',
+        status: 'active',
+        assignedBiositeIds: activeBiosite?.id ? [activeBiosite.id] : [],
+        permissions: [...selectedPermissions],
+        mustChangePassword: true,
+        temporaryPassword: 'SenhaSegura123!'
+      });
     }
 
     saveGrantedList(updated);

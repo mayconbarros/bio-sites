@@ -1,4 +1,18 @@
-export type UserRole = 'agency_admin' | 'client_owner';
+export type UserRole = 'admin' | 'client' | 'agency_admin' | 'client_owner';
+
+export interface ClientUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: 'client';
+  assignedBiositeIds: string[];
+  permissions: string[];
+  status: 'active' | 'pending' | 'blocked';
+  mustChangePassword?: boolean;
+  temporaryPassword?: string;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
@@ -7,6 +21,10 @@ export interface User {
   role: UserRole;
   agencyId?: string;
   phone?: string;
+  assignedBiositeIds?: string[];
+  permissions?: string[];
+  mustChangePassword?: boolean;
+  temporaryPassword?: string;
 }
 
 export type ButtonStyle = 'rounded' | 'pill' | 'sharp' | 'glass';

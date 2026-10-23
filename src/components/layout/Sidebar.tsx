@@ -5,7 +5,10 @@ import {
   User, 
   Gift, 
   Headphones, 
-  LogOut
+  LogOut,
+  Users,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -15,9 +18,11 @@ export const Sidebar: React.FC = () => {
     agencyActiveTab,
     setAgencyActiveTab,
     biosites, 
+    clients,
     showToast,
     logout,
-    currentUser
+    currentUser,
+    switchUserRole
   } = useApp();
 
   return (
@@ -48,14 +53,41 @@ export const Sidebar: React.FC = () => {
                   setCurrentView('agency');
                   setAgencyActiveTab('sites');
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                   currentView === 'agency' && agencyActiveTab === 'sites'
-                    ? 'bg-neutral-100 text-neutral-900 font-bold'
+                    ? 'bg-neutral-100 text-neutral-900 font-bold border-l-2 border-[#ff2a85]'
                     : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
                 }`}
               >
-                <LayoutGrid className="w-4 h-4 text-neutral-700" />
-                <span>Meus sites</span>
+                <div className="flex items-center gap-3">
+                  <LayoutGrid className="w-4 h-4 text-neutral-700" />
+                  <span>Meus sites</span>
+                </div>
+                <span className="text-[10px] bg-neutral-200/70 text-neutral-600 px-1.5 py-0.5 rounded-full font-bold">
+                  {biosites.length}
+                </span>
+              </button>
+
+              {/* Novo Item: Gestão de Clientes */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentView('agency');
+                  setAgencyActiveTab('clients');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                  currentView === 'agency' && agencyActiveTab === 'clients'
+                    ? 'bg-neutral-100 text-neutral-900 font-bold border-l-2 border-[#ff2a85]'
+                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Users className="w-4 h-4 text-neutral-700" />
+                  <span>Clientes</span>
+                </div>
+                <span className="text-[10px] bg-[#fff7fa] border border-[#fce7f3] text-[#ff2a85] px-1.5 py-0.5 rounded-full font-bold">
+                  {clients?.length || 0}
+                </span>
               </button>
 
               <button
@@ -66,7 +98,7 @@ export const Sidebar: React.FC = () => {
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition cursor-pointer ${
                   currentView === 'agency' && agencyActiveTab === 'profile'
-                    ? 'bg-neutral-100 text-neutral-900 font-bold'
+                    ? 'bg-neutral-100 text-neutral-900 font-bold border-l-2 border-[#ff2a85]'
                     : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 font-medium'
                 }`}
               >
@@ -110,13 +142,36 @@ export const Sidebar: React.FC = () => {
 
       {/* Rodapé com perfil do usuário e botão de Sair */}
       <div className="p-4 border-t border-neutral-100 space-y-3">
+        
+        {/* Simulador rápido de RBAC */}
+        <div className="bg-neutral-50 rounded-xl p-2.5 border border-neutral-200 space-y-1.5">
+          <div className="flex items-center justify-between text-neutral-600 font-semibold px-0.5 text-[11px]">
+            <span className="flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#ff2a85]" />
+              Papel atual:
+            </span>
+            <span className="text-[10px] bg-neutral-200/80 px-1.5 py-0.5 rounded font-mono font-bold text-neutral-800">
+              ADMIN
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => switchUserRole('client')}
+            className="w-full py-1.5 px-2 bg-white hover:bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-800 font-semibold flex items-center justify-center gap-1.5 transition text-[11px] cursor-pointer shadow-2xs"
+            title="Simular visão como cliente"
+          >
+            <UserCheck className="w-3.5 h-3.5 text-[#ff2a85]" />
+            <span>Simular como Cliente</span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-2.5 px-2">
           <div className="w-8 h-8 rounded-full bg-[#ff2a85]/10 text-[#ff2a85] font-bold text-xs flex items-center justify-center shrink-0 border border-[#ff2a85]/20 shadow-2xs">
             MB
           </div>
           <div className="min-w-0 flex-1">
             <span className="text-xs font-bold text-neutral-900 block truncate">
-              {currentUser?.name || 'Maycon Barros'}
+              {currentUser?.name || 'Maycon Barros (Admin)'}
             </span>
             <span className="text-[10px] text-neutral-500 block truncate">
               {currentUser?.email || 'mayconconsultoria@gmail.com'}

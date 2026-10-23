@@ -44,6 +44,7 @@ import {
   Download,
   Calendar as CalendarIcon,
   Eye,
+  EyeOff,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
@@ -75,7 +76,9 @@ import {
   CalendarDays,
   Target,
   Key,
-  Gift
+  Gift,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
 
 interface ColorPickerFieldProps {
@@ -195,7 +198,61 @@ export const ClientDashboard: React.FC = () => {
     clientActiveTab,
     setClientActiveTab,
     logout,
+    currentUser,
+    switchUserRole,
+    changePassword,
   } = useApp();
+
+  const isClientRole = currentUser?.role === 'client';
+  const clientPermissions = currentUser?.permissions || [];
+  const mustChangePassword = isClientRole && !!currentUser?.mustChangePassword;
+
+  // Estado para modal obrigatório de troca de senha no 1º login
+  const [currentPwInput, setCurrentPwInput] = useState(currentUser?.temporaryPassword || 'SenhaSegura123!');
+  const [newPwInput, setNewPwInput] = useState('');
+  const [confirmPwInput, setConfirmPwInput] = useState('');
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwLoading, setPwLoading] = useState(false);
+
+  useEffect(() => {
+    if (currentUser?.temporaryPassword) {
+      setCurrentPwInput(currentUser.temporaryPassword);
+    }
+  }, [currentUser]);
+
+  const handleSaveNewPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+
+    if (!currentPwInput.trim()) {
+      setPwError('Informe a senha atual.');
+      return;
+    }
+    if (!newPwInput.trim()) {
+      setPwError('Informe a nova senha.');
+      return;
+    }
+    if (newPwInput.length < 6) {
+      setPwError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (newPwInput !== confirmPwInput) {
+      setPwError('A confirmação da nova senha não confere.');
+      return;
+    }
+
+    setPwLoading(true);
+    setTimeout(() => {
+      const res = changePassword(currentPwInput, newPwInput);
+      setPwLoading(false);
+      if (!res.success) {
+        setPwError(res.message);
+      } else {
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.5 } });
+      }
+    }, 350);
+  };
 
   const selectedTab = clientActiveTab || 'aparencia';
   const setSelectedTab = setClientActiveTab;
@@ -1374,6 +1431,41 @@ export const ClientDashboard: React.FC = () => {
     },
   ];
 
+  // RBAC: Se o usuário for 'client', filtra apenas as seções e abas permitidas
+  const displayedSections = React.useMemo(() => {
+    if (!isClientRole) {
+      return NAV_SECTIONS;
+    }
+    return NAV_SECTIONS.map(section => {
+      // Configurações (Acesso do cliente) e Parceria são restritos aos Admins
+      if (section.title === 'Configurações' || section.title === 'Parceria') return null;
+
+      const filteredItems = section.items.filter(item => {
+        if (item.id === 'profissionais') {
+          return clientPermissions.includes('Serviços') || clientPermissions.includes('Disponibilidade');
+        }
+        return clientPermissions.includes(item.label);
+      });
+
+      if (filteredItems.length === 0) return null;
+
+      return {
+        ...section,
+        items: filteredItems,
+      };
+    }).filter(Boolean) as typeof NAV_SECTIONS;
+  }, [isClientRole, clientPermissions]);
+
+  // Garante que o cliente acesse uma aba permitida
+  useEffect(() => {
+    if (isClientRole && displayedSections.length > 0) {
+      const allAllowedItemIds = displayedSections.flatMap(s => s.items.map(i => i.id));
+      if (!allAllowedItemIds.includes(selectedTab)) {
+        setSelectedTab(allAllowedItemIds[0] || 'estatisticas');
+      }
+    }
+  }, [isClientRole, displayedSections, selectedTab]);
+
   // Dates for the chart X-axis
   const CHART_DATES = [
     '02/07', '03/07', '04/07', '05/07', '07/07', '09/07', '10/07', '11/07',
@@ -1384,29 +1476,72 @@ export const ClientDashboard: React.FC = () => {
   return (
     <div className="flex-1 bg-white text-neutral-900 min-h-screen flex flex-col font-sans select-none">
       
-      {/* 1. TOPMOST BAR matching screenshot: "← Voltar pros meus sites" and right actions */}
+      {/* 1. TOPMOST BAR com indicação de Papel RBAC */}
       <div className="w-full bg-white border-b border-neutral-200 px-6 py-2.5 flex items-center justify-between text-xs text-neutral-600 shrink-0">
-        <button 
-          onClick={() => setCurrentView('agency')} 
-          className="flex items-center gap-1.5 font-medium hover:text-neutral-900 transition cursor-pointer"
-        >
-          <span>← Voltar pros meus sites</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {isClientRole ? (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-bold text-gray-900 text-xs">
+                Painel do Cliente • {activeBiosite.title}
+              </span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                CLIENTE: {currentUser?.name}
+              </span>
+            </div>
+          ) : (
+            <button 
+              onClick={() => setCurrentView('agency')} 
+              className="flex items-center gap-1.5 font-medium hover:text-neutral-900 transition cursor-pointer"
+            >
+              <span>← Voltar pros meus sites</span>
+            </button>
+          )}
+        </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Botão de alternância rápida de papel para facilitar a avaliação */}
+          {isClientRole ? (
+            <button
+              type="button"
+              onClick={() => switchUserRole('admin')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold border border-gray-200 transition cursor-pointer"
+              title="Voltar para a visão completa de Administrador"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[#ff2a85]" />
+              <span className="hidden sm:inline">Voltar p/</span>
+              <span>Visão Admin</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => switchUserRole('client')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#fff7fa] border border-[#fce7f3] text-[#ff2a85] text-xs font-bold hover:bg-[#ffedf4] transition cursor-pointer"
+              title="Testar visão do cliente logado"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Testar Visão</span>
+              <span>Cliente</span>
+            </button>
+          )}
+
           <button 
             onClick={() => window.open('https://api.whatsapp.com/send?phone=5511999999999&text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20painel%20MB%20Web%20Digital', '_blank')}
-            className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer"
+            className="hidden md:flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer"
           >
             <Headphones className="w-3.5 h-3.5 text-neutral-500" />
             <span>Falar com gerente</span>
           </button>
-          <button 
-            onClick={() => setCurrentView('agency')} 
-            className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer text-xs"
-          >
-            <span>Meus sites</span>
-          </button>
+          
+          {!isClientRole && (
+            <button 
+              onClick={() => setCurrentView('agency')} 
+              className="flex items-center gap-1.5 hover:text-neutral-900 transition cursor-pointer text-xs"
+            >
+              <span>Meus sites</span>
+            </button>
+          )}
+
           <button 
             onClick={() => logout()} 
             className="flex items-center gap-1.5 hover:text-red-600 transition cursor-pointer text-xs"
@@ -1525,7 +1660,7 @@ export const ClientDashboard: React.FC = () => {
         {!sidebarCollapsed && (
           <aside className="w-56 bg-white border-r border-neutral-200 py-4 px-3 flex flex-col justify-between shrink-0 h-[calc(100vh-92px)] overflow-y-auto">
             <div className="space-y-6">
-              {NAV_SECTIONS.map((sec, secIdx) => (
+              {displayedSections.map((sec, secIdx) => (
                 <div key={secIdx}>
                   <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider px-3 block mb-1.5">
                     {sec.title}
@@ -1559,6 +1694,134 @@ export const ClientDashboard: React.FC = () => {
         {/* Right Main Content */}
         <main className="flex-1 p-6 lg:p-8 min-w-0 relative">
           
+          {/* ALERTA CRÍTICO DE SEGURANÇA: Banner no topo para troca de senha provisória */}
+          {mustChangePassword && (
+            <div className="mb-6 p-4 rounded-2xl bg-[#fff7fa] border-2 border-[#ff2a85] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#ff2a85] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <ShieldAlert className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-extrabold text-neutral-900">
+                      Alerta Crítico de Segurança: Troca de Senha Obrigatória
+                    </h4>
+                    <span className="text-[10px] bg-[#ff2a85] text-white px-2 py-0.2 rounded-full font-bold uppercase">
+                      1º Login
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-600 mt-0.5 font-medium">
+                    Por questões de segurança, você precisa alterar sua senha provisória agora para ter acesso aos recursos do mini-site.
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0">
+                <span className="text-[11px] font-bold text-[#ff2a85] bg-white border border-[#fce7f3] px-3 py-1.5 rounded-xl block">
+                  Ação bloqueante ativa
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL BLOQUEANTE DE ALTERAÇÃO OBRIGATÓRIA DE SENHA */}
+          {mustChangePassword && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+              <div className="bg-white rounded-2xl border-2 border-[#ff2a85] max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl relative animate-in zoom-in-95 duration-200">
+                
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-[#fff7fa] border border-[#fce7f3] text-[#ff2a85] flex items-center justify-center mx-auto shadow-2xs">
+                    <ShieldAlert className="w-6 h-6 stroke-[2.2]" />
+                  </div>
+                  <h3 className="text-base font-extrabold text-neutral-900 tracking-tight">
+                    Alteração de Senha Obrigatória
+                  </h3>
+                  <p className="text-xs text-neutral-600 leading-relaxed max-w-xs mx-auto font-medium">
+                    Por questões de segurança, você precisa alterar sua senha provisória agora.
+                  </p>
+                </div>
+
+                {pwError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span>{pwError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveNewPassword} className="space-y-3.5">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-neutral-800 block">
+                      Senha Atual (Provisória)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentPwInput}
+                      onChange={e => setCurrentPwInput(e.target.value)}
+                      placeholder="SenhaSegura123!"
+                      required
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-xs font-mono font-bold text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff2a85]/20 focus:border-[#ff2a85]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-neutral-800 block">
+                      Nova Senha (mínimo 6 caracteres)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPw ? 'text' : 'password'}
+                        value={newPwInput}
+                        onChange={e => setNewPwInput(e.target.value)}
+                        placeholder="Digite sua nova senha"
+                        required
+                        className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-neutral-200 text-xs font-medium text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff2a85]/20 focus:border-[#ff2a85]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPw(!showNewPw)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                      >
+                        {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-neutral-800 block">
+                      Confirmar Nova Senha
+                    </label>
+                    <input
+                      type={showNewPw ? 'text' : 'password'}
+                      value={confirmPwInput}
+                      onChange={e => setConfirmPwInput(e.target.value)}
+                      placeholder="Repita a nova senha"
+                      required
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-xs font-medium text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#ff2a85]/20 focus:border-[#ff2a85]"
+                    />
+                  </div>
+
+                  {/* Botão Salvar Verde Limão conforme a regra estrita de design */}
+                  <button
+                    type="submit"
+                    disabled={pwLoading}
+                    className="w-full mt-2 py-3 px-4 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] active:scale-[0.99] text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {pwLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Salvando senha...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>Salvar Nova Senha & Liberar Painel</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* Floating Toast Notification matching Print 2 */}
           {floatingToast && (
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#0b1e16] text-white border border-emerald-900/60 px-4 py-2 rounded-2xl flex items-center gap-2.5 text-xs font-semibold shadow-xl animate-in slide-in-from-top-2">
