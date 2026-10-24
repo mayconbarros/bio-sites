@@ -809,9 +809,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 hover:opacity-80 transition cursor-pointer text-neutral-800"
             >
-              <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${creatorProfile.photoUrl ? 'bg-transparent' : 'bg-black'}`}>
                 {creatorProfile.photoUrl ? (
-                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">
                     on
@@ -822,9 +822,9 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
             </a>
           ) : (
             <div className="inline-flex items-center gap-1.5 text-neutral-800">
-              <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${creatorProfile?.photoUrl ? 'bg-transparent' : 'bg-black'}`}>
                 {creatorProfile?.photoUrl ? (
-                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">
                     on

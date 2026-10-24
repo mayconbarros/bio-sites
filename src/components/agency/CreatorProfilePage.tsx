@@ -92,12 +92,12 @@ export const CreatorProfilePage: React.FC = () => {
           <div>
             <div className="flex items-center gap-4">
               {/* Avatar Redondo */}
-              <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 shadow-xs border border-neutral-200/80 flex items-center justify-center bg-black">
+              <div className={`w-14 h-14 rounded-full overflow-hidden shrink-0 shadow-xs border border-neutral-200/80 flex items-center justify-center ${photoUrl ? 'bg-transparent' : 'bg-black'}`}>
                 {photoUrl ? (
                   <img 
                     src={photoUrl} 
                     alt="Logo do criador" 
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <span className="text-[#00e5ff] font-extrabold text-sm tracking-tighter select-none font-mono">
@@ -229,9 +229,9 @@ export const CreatorProfilePage: React.FC = () => {
 
             {/* Badge da prévia com ícone e "Feito por Vision Local" */}
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${photoUrl ? 'bg-transparent' : 'bg-black'}`}>
                 {photoUrl ? (
-                  <img src={photoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={photoUrl} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">
                     on

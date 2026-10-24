@@ -308,7 +308,7 @@ export const ProfissionaisTab: React.FC = () => {
                   >
                     <div 
                       className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs overflow-hidden"
-                      style={{ backgroundColor: prof.color || '#1d4ed8' }}
+                      style={{ backgroundColor: prof.photoUrl ? 'transparent' : (prof.color || '#1d4ed8') }}
                     >
                       {prof.photoUrl ? (
                         <img src={prof.photoUrl} alt={prof.name} className="w-full h-full object-cover" />

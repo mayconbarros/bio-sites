@@ -202,6 +202,7 @@ export const ClientDashboard: React.FC = () => {
     currentUser,
     switchUserRole,
     changePassword,
+    creatorProfile,
   } = useApp();
 
   const isClientRole = currentUser?.role === 'client';
@@ -2351,15 +2352,24 @@ export const ClientDashboard: React.FC = () => {
                           {activeBiosite.title}
                         </h3>
 
-                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
+                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none gap-1.5">
+                          {creatorProfile?.photoUrl ? (
+                            <div className="w-4 h-4 rounded-full flex items-center justify-center overflow-hidden shrink-0 bg-transparent">
+                              <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+                              <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">on</span>
+                            </div>
+                          )}
                           <span>Feito por&nbsp;</span>
                           <a
-                            href="https://mbwebdigital.com.br"
+                            href={creatorProfile?.linkUrl || 'https://mbwebdigital.com.br'}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-gray-500 underline hover:text-gray-700 transition"
+                            className="text-gray-500 underline hover:text-gray-700 transition font-semibold"
                           >
-                            MB Web Digital
+                            {creatorProfile?.name || 'MB Web Digital'}
                           </a>
                         </div>
                       </div>
@@ -2822,15 +2832,24 @@ export const ClientDashboard: React.FC = () => {
                         </h3>
 
                         {/* Rodapé: Feito por MB Web Digital */}
-                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none">
+                        <div className="mt-6 mb-2 flex items-center justify-center text-center text-xs text-neutral-800 select-none gap-1.5">
+                          {creatorProfile?.photoUrl ? (
+                            <div className="w-4 h-4 rounded-full flex items-center justify-center overflow-hidden shrink-0 bg-transparent">
+                              <img src={creatorProfile.photoUrl} alt="Logo" className="w-full h-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-black flex items-center justify-center overflow-hidden shrink-0">
+                              <span className="text-[#00e5ff] font-extrabold text-[7px] tracking-tighter font-mono">on</span>
+                            </div>
+                          )}
                           <span>Feito por&nbsp;</span>
                           <a
-                            href="https://mbwebdigital.com.br"
+                            href={creatorProfile?.linkUrl || 'https://mbwebdigital.com.br'}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-gray-500 underline hover:text-gray-700 transition"
+                            className="text-gray-500 underline hover:text-gray-700 transition font-semibold"
                           >
-                            MB Web Digital
+                            {creatorProfile?.name || 'MB Web Digital'}
                           </a>
                         </div>
                       </div>
