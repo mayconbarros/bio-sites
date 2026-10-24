@@ -8,7 +8,8 @@ import {
   LogOut,
   Users,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Link as LinkIcon
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -88,6 +89,25 @@ export const Sidebar: React.FC = () => {
                 <span className="text-[10px] bg-[#fff7fa] border border-[#fce7f3] text-[#ff2a85] px-1.5 py-0.5 rounded-full font-bold">
                   {clients?.length || 0}
                 </span>
+              </button>
+
+              {/* Item: Meus links / Meu link */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentView('agency');
+                  setAgencyActiveTab('links');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                  currentView === 'agency' && agencyActiveTab === 'links'
+                    ? 'bg-neutral-100 text-neutral-900 font-bold border-l-2 border-[#ff2a85]'
+                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <LinkIcon className="w-4 h-4 text-neutral-700" />
+                  <span>{currentUser?.role === 'client' ? 'Meu link' : 'Meus links'}</span>
+                </div>
               </button>
 
               <button

@@ -571,19 +571,6 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
             {biosite.subtitle}
           </p>
 
-          {biosite.instagramHandle && (
-            <a 
-              href={`https://instagram.com/${biosite.instagramHandle.replace('@', '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1.5 text-xs font-semibold hover:underline flex items-center gap-1 transition"
-              style={{ color: biosite.themeConfig.primaryColor }}
-            >
-              <Instagram className="w-3.5 h-3.5" />
-              {biosite.instagramHandle}
-            </a>
-          )}
-
           <p 
             className="mt-2.5 text-xs leading-relaxed max-w-xs"
             style={{ color: biosite.themeConfig.textMutedColor }}

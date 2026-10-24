@@ -7,6 +7,7 @@ import { THEME_PRESETS } from '../../data/mockData';
 import { CustomToggle } from '../common/CustomToggle';
 import { ProfissionaisTab } from './ProfissionaisTab';
 import { AcessoClienteTab } from './AcessoClienteTab';
+import { LinksManagementPage } from '../links/LinksManagementPage';
 import confetti from 'canvas-confetti';
 import { 
   BarChart2, 
@@ -1384,7 +1385,7 @@ export const ClientDashboard: React.FC = () => {
       title: 'Análise',
       items: [
         { id: 'estatisticas', label: 'Estatísticas', icon: BarChart2 },
-        { id: 'links', label: 'Meus Links', icon: LinkIcon },
+        { id: 'links', label: isClientRole ? 'Meu link' : 'Meus links', icon: LinkIcon },
         { id: 'cadastros', label: 'Cadastros deste site', icon: ClipboardList },
         { id: 'pix', label: 'Pix recebidos', icon: DollarSign },
         { id: 'agendamentos', label: 'Agendamentos', icon: Users },
@@ -1443,6 +1444,9 @@ export const ClientDashboard: React.FC = () => {
       const filteredItems = section.items.filter(item => {
         if (item.id === 'profissionais') {
           return clientPermissions.includes('Serviços') || clientPermissions.includes('Disponibilidade');
+        }
+        if (item.id === 'links') {
+          return clientPermissions.includes('Meus Links') || clientPermissions.includes('Meus links') || clientPermissions.includes('Meu link');
         }
         return clientPermissions.includes(item.label);
       });
@@ -4868,8 +4872,15 @@ export const ClientDashboard: React.FC = () => {
             <ProfissionaisTab />
           )}
 
+          {/* TAB: MEUS LINKS (Admin) / MEU LINK (Cliente) */}
+          {selectedTab === 'links' && (
+            <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
+              <LinksManagementPage />
+            </div>
+          )}
+
           {/* EDITING TABS: Re-uses BioSiteEditor smoothly */}
-          {(['titulos', 'leads', 'layout', 'links', 'pix', 'cadastros'].includes(selectedTab)) && (
+          {(['titulos', 'leads', 'layout', 'pix', 'cadastros'].includes(selectedTab)) && (
             <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-neutral-200 p-6 shadow-2xs animate-in fade-in duration-200">
               <BioSiteEditor 
                 biosite={activeBiosite} 

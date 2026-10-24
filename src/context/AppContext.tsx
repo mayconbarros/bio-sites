@@ -31,8 +31,8 @@ interface AppContextType {
   logout: () => void;
   switchUserRole: (role: 'admin' | 'client', clientUser?: ClientUser) => void;
   changePassword: (currentPassword: string, newPassword: string) => { success: boolean; message: string };
-  agencyActiveTab: 'sites' | 'clients' | 'profile';
-  setAgencyActiveTab: (tab: 'sites' | 'clients' | 'profile') => void;
+  agencyActiveTab: 'sites' | 'clients' | 'profile' | 'links';
+  setAgencyActiveTab: (tab: 'sites' | 'clients' | 'profile' | 'links') => void;
   clients: ClientUser[];
   addClient: (data: Omit<ClientUser, 'id' | 'createdAt'>) => ClientUser;
   updateClient: (id: string, data: Partial<ClientUser>) => void;
@@ -248,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
   });
 
-  const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'clients' | 'profile'>('sites');
+  const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'clients' | 'profile' | 'links'>('sites');
 
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile>(() => {
     try {
