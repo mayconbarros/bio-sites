@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, safeSetItem } from '../../context/AppContext';
+import { saveMedia, deleteMedia } from '../../utils/mediaStorage';
 import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo, DaySchedule } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
@@ -278,9 +279,7 @@ export const ClientDashboard: React.FC = () => {
   });
 
   React.useEffect(() => {
-    try {
-      localStorage.setItem('biosaas_catalogs', JSON.stringify(catalogsList));
-    } catch {}
+    safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));
   }, [catalogsList]);
 
   const [isNewCatalogModalOpen, setIsNewCatalogModalOpen] = useState(false);
@@ -384,7 +383,11 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    if (file.size > 20 * 1024 * 1024) {
+    if (isVideo) {
+      const objectUrl = URL.createObjectURL(file);
+      saveMedia(`catalog_media_${Date.now()}`, file).catch(console.warn);
+      commitItem(objectUrl);
+    } else if (file.size > 2 * 1024 * 1024) {
       commitItem(URL.createObjectURL(file));
     } else {
       const reader = new FileReader();
@@ -415,7 +418,11 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    if (file.size > 20 * 1024 * 1024) {
+    if (isVideo) {
+      const objectUrl = URL.createObjectURL(file);
+      saveMedia(`catalog_media_${Date.now()}`, file).catch(console.warn);
+      commitReplace(objectUrl);
+    } else if (file.size > 2 * 1024 * 1024) {
       commitReplace(URL.createObjectURL(file));
     } else {
       const reader = new FileReader();
@@ -485,6 +492,35 @@ export const ClientDashboard: React.FC = () => {
       };
     }));
     showToast('Item excluído');
+  };
+
+  const handleSaveCatalog = () => {
+    if (activeBiosite) {
+      updateBiosite(activeBiosite.id, {
+        ...({
+          catalogs: catalogsList,
+          carouselAutoplay,
+          carouselInterval,
+          address: addressForm.address ? {
+            street: addressForm.address,
+            city: '',
+            state: '',
+            buttonText: addressForm.buttonText,
+            cardBgColor: addressForm.cardBgColor,
+            cardTextColor: addressForm.cardTextColor,
+            buttonBgColor: addressForm.buttonBgColor,
+            buttonTextColor: addressForm.buttonTextColor,
+          } : undefined,
+        } as any),
+      });
+    }
+    safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 }
+    });
+    showToast('Alterações do catálogo salvas com sucesso!', 'success');
   };
 
   // Appointments state for the "Agendamentos" tab
@@ -619,11 +655,12 @@ export const ClientDashboard: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleCoverVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('video/')) {
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v|avi)$/i.test(file.name);
+    if (!isVideo) {
       showToast('Por favor, selecione um arquivo de vídeo válido (MP4, WebM, MOV).', 'error');
       return;
     }
@@ -633,20 +670,33 @@ export const ClientDashboard: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        const resultUrl = reader.result;
-        setAppearanceForm(prev => ({ ...prev, videoUrl: resultUrl }));
-        if (activeBiosite) {
-          updateBiosite(activeBiosite.id, { 
-            ...({ videoUrl: resultUrl } as any)
-          });
-        }
-        showToast('Vídeo de capa carregado do computador com sucesso!', 'success');
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const siteId = activeBiosite?.id || 'current';
+      
+      // Save to IndexedDB so it persists across refreshes without hitting localStorage quota
+      await saveMedia(`cover_video_${siteId}`, file);
+
+      setAppearanceForm(prev => ({ ...prev, videoUrl: objectUrl }));
+      if (activeBiosite) {
+        updateBiosite(activeBiosite.id, { 
+          videoUrl: objectUrl,
+          coverType: 'video',
+        } as any);
       }
-    };
-    reader.readAsDataURL(file);
+      showToast('Vídeo de capa carregado com sucesso!', 'success');
+    } catch (err) {
+      console.warn('Erro ao salvar vídeo em IndexedDB, usando URL local:', err);
+      const objectUrl = URL.createObjectURL(file);
+      setAppearanceForm(prev => ({ ...prev, videoUrl: objectUrl }));
+      if (activeBiosite) {
+        updateBiosite(activeBiosite.id, { 
+          videoUrl: objectUrl,
+          coverType: 'video',
+        } as any);
+      }
+      showToast('Vídeo de capa carregado!', 'success');
+    }
     e.target.value = '';
   };
 
@@ -1609,9 +1659,9 @@ export const ClientDashboard: React.FC = () => {
             rel="noopener noreferrer"
             onClick={(e) => {
               if (activeBiosite) {
-                localStorage.setItem('biosaas_biosites', JSON.stringify(biosites));
-                localStorage.setItem('biosaas_services', JSON.stringify(services));
-                localStorage.setItem('biosaas_appointments', JSON.stringify(appointments));
+                safeSetItem('biosaas_biosites', JSON.stringify(biosites));
+                safeSetItem('biosaas_services', JSON.stringify(services));
+                safeSetItem('biosaas_appointments', JSON.stringify(appointments));
               }
               if (e.metaKey || e.ctrlKey || e.button === 1) return;
               try {
@@ -2584,10 +2634,11 @@ export const ClientDashboard: React.FC = () => {
                       {appearanceForm.videoUrl && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             setAppearanceForm(p => ({ ...p, videoUrl: '' }));
                             if (activeBiosite) {
-                              updateBiosite(activeBiosite.id, { ...({ videoUrl: '' } as any) });
+                              updateBiosite(activeBiosite.id, { ...({ videoUrl: '', coverType: 'image' } as any) });
+                              await deleteMedia(`cover_video_${activeBiosite.id}`);
                             }
                             showToast('Vídeo removido!');
                           }}
@@ -3627,13 +3678,25 @@ export const ClientDashboard: React.FC = () => {
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={handleOpenNewCatalogModal}
-                        className="px-4 py-2 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-bold text-xs shadow-2xs transition cursor-pointer shrink-0 flex items-center gap-1"
-                      >
-                        <span>+ Novo catálogo</span>
-                      </button>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleSaveCatalog}
+                          className="px-4 py-2 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-black text-xs shadow-2xs transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          title="Salvar alterações do catálogo"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Salvar alterações</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleOpenNewCatalogModal}
+                          className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs shadow-2xs transition cursor-pointer flex items-center gap-1 active:scale-95"
+                        >
+                          <span>+ Novo catálogo</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Estado Vazio (Regra 1: se length === 0) */}
@@ -4215,6 +4278,24 @@ export const ClientDashboard: React.FC = () => {
                       </div>
                     </div>
 
+                  </div>
+
+                  {/* Card / Bloco de Salvar Alterações do Catálogo */}
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900">Salvar alterações do Catálogo</h4>
+                      <p className="text-[11px] text-neutral-500 mt-0.5 font-normal">
+                        Grave todas as alterações feitas nos catálogos, mídias e carrossel para atualizar seu mini-site.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveCatalog}
+                      className="px-6 py-2.5 rounded-xl bg-[#d9f92e] hover:bg-[#c8ea23] text-neutral-950 font-black text-xs shadow-xs transition cursor-pointer flex items-center justify-center gap-2 active:scale-95 shrink-0"
+                    >
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Salvar alterações</span>
+                    </button>
                   </div>
 
                 </div>

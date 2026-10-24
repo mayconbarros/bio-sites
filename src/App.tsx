@@ -135,15 +135,34 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             <p className="text-xs text-neutral-500">
               {this.state.error?.message || 'Clique no botão abaixo para restaurar o estado.'}
             </p>
-            <button
-              onClick={() => {
-                this.setState({ hasError: false, error: null });
-                window.location.reload();
-              }}
-              className="px-5 py-2.5 rounded-xl bg-[#ff2a85] text-white text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer"
-            >
-              Recarregar aplicação
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.reload();
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#ff2a85] text-white text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer"
+              >
+                Recarregar aplicação
+              </button>
+              {(this.state.error?.message?.toLowerCase().includes('quota') || this.state.error?.name === 'QuotaExceededError') && (
+                <button
+                  onClick={() => {
+                    try {
+                      // Remove large keys
+                      for (const key of ['biosaas_biosites', 'biosaas_catalogs', 'biosaas_services']) {
+                        localStorage.removeItem(key);
+                      }
+                    } catch {}
+                    this.setState({ hasError: false, error: null });
+                    window.location.reload();
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold transition cursor-pointer"
+                >
+                  Limpar dados pesados
+                </button>
+              )}
+            </div>
           </div>
         </div>
       );

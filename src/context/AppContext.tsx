@@ -18,6 +18,40 @@ import {
   INITIAL_AGENCY_SETTINGS 
 } from '../data/mockData';
 import { INITIAL_CLIENTS } from '../data/rbacConstants';
+import { getMediaUrl } from '../utils/mediaStorage';
+
+export function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err: any) {
+    console.warn(`[Storage] Storage quota or issue for key '${key}'. Sanitizing large data...`, err?.message || err);
+    try {
+      const parsed = JSON.parse(value);
+      const stripLargeStrings = (val: any): any => {
+        if (typeof val === 'string') {
+          // If large data URL (>40KB), data:video, or blob: URL, strip to avoid localStorage quota crash
+          if (val.startsWith('data:video/') || (val.startsWith('data:') && val.length > 40000) || val.startsWith('blob:')) {
+            return '';
+          }
+          return val;
+        }
+        if (Array.isArray(val)) return val.map(stripLargeStrings);
+        if (val && typeof val === 'object') {
+          const res: any = {};
+          for (const k of Object.keys(val)) {
+            res[k] = stripLargeStrings(val[k]);
+          }
+          return res;
+        }
+        return val;
+      };
+      const cleaned = stripLargeStrings(parsed);
+      localStorage.setItem(key, JSON.stringify(cleaned));
+    } catch (innerErr) {
+      console.warn(`[Storage] Could not persist sanitized key '${key}'`, innerErr);
+    }
+  }
+}
 
 export type AppView = 'agency' | 'client' | 'public' | 'login';
 
@@ -266,7 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCreatorProfile = (profile: Partial<CreatorProfile>) => {
     setCreatorProfile(prev => {
       const next = { ...prev, ...profile };
-      localStorage.setItem('biosaas_creator_profile', JSON.stringify(next));
+      safeSetItem('biosaas_creator_profile', JSON.stringify(next));
       return next;
     });
   };
@@ -286,28 +320,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   useEffect(() => {
-    localStorage.setItem('biosaas_biosites', JSON.stringify(biosites));
+    safeSetItem('biosaas_biosites', JSON.stringify(biosites));
   }, [biosites]);
 
   useEffect(() => {
-    localStorage.setItem('biosaas_services', JSON.stringify(services));
+    safeSetItem('biosaas_services', JSON.stringify(services));
   }, [services]);
 
   useEffect(() => {
-    localStorage.setItem('biosaas_professionals', JSON.stringify(professionals));
+    safeSetItem('biosaas_professionals', JSON.stringify(professionals));
   }, [professionals]);
 
   useEffect(() => {
-    localStorage.setItem('biosaas_appointments', JSON.stringify(appointments));
+    safeSetItem('biosaas_appointments', JSON.stringify(appointments));
   }, [appointments]);
 
   useEffect(() => {
-    localStorage.setItem('biosaas_agency', JSON.stringify(agencySettings));
+    safeSetItem('biosaas_agency', JSON.stringify(agencySettings));
   }, [agencySettings]);
 
   useEffect(() => {
-    localStorage.setItem('biosaas_events', JSON.stringify(eventCounts));
+    safeSetItem('biosaas_events', JSON.stringify(eventCounts));
   }, [eventCounts]);
+
+  // Hydrate stored cover videos from IndexedDB
+  useEffect(() => {
+    let isMounted = true;
+    biosites.forEach(async (b) => {
+      try {
+        const storedVideoUrl = await getMediaUrl(`cover_video_${b.id}`);
+        if (isMounted && storedVideoUrl) {
+          setBiosites(prev => prev.map(item => item.id === b.id ? { ...item, videoUrl: storedVideoUrl, coverType: 'video' } : item));
+        }
+      } catch (e) {
+        console.warn('Could not hydrate video from IndexedDB:', e);
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
 
   // Sync state across browser tabs in real-time and handle browser navigation
   useEffect(() => {
