@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp, safeSetItem } from '../../context/AppContext';
 import { saveMedia, deleteMedia } from '../../utils/mediaStorage';
+import { uploadMediaFile } from '../../utils/uploadMedia';
 import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo, DaySchedule } from '../../types';
 import { BioSiteEditor } from '../agency/BioSiteEditor';
 import { BioSiteView } from '../public/BioSiteView';
@@ -391,22 +392,17 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    if (isVideo) {
-      const objectUrl = URL.createObjectURL(file);
-      saveMedia(`catalog_media_${Date.now()}`, file).catch(console.warn);
-      commitItem(objectUrl);
-    } else if (file.size > 2 * 1024 * 1024) {
-      commitItem(URL.createObjectURL(file));
-    } else {
-      const reader = new FileReader();
-      reader.onload = (loadEvent) => {
-        const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
-        commitItem(fileUrl);
-      };
-      reader.onerror = () => {
-        commitItem(URL.createObjectURL(file));
-      };
-      reader.readAsDataURL(file);
+    try {
+      showToast('Enviando mídia...');
+      uploadMediaFile(file).then(uploadedUrl => {
+        commitItem(uploadedUrl);
+      }).catch(() => {
+        const fallbackUrl = URL.createObjectURL(file);
+        commitItem(fallbackUrl);
+      });
+    } catch {
+      const fallbackUrl = URL.createObjectURL(file);
+      commitItem(fallbackUrl);
     }
   };
 
@@ -426,22 +422,17 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    if (isVideo) {
-      const objectUrl = URL.createObjectURL(file);
-      saveMedia(`catalog_media_${Date.now()}`, file).catch(console.warn);
-      commitReplace(objectUrl);
-    } else if (file.size > 2 * 1024 * 1024) {
-      commitReplace(URL.createObjectURL(file));
-    } else {
-      const reader = new FileReader();
-      reader.onload = (loadEvent) => {
-        const fileUrl = (loadEvent.target?.result as string) || URL.createObjectURL(file);
-        commitReplace(fileUrl);
-      };
-      reader.onerror = () => {
-        commitReplace(URL.createObjectURL(file));
-      };
-      reader.readAsDataURL(file);
+    try {
+      showToast('Enviando mídia atualizada...');
+      uploadMediaFile(file).then(uploadedUrl => {
+        commitReplace(uploadedUrl);
+      }).catch(() => {
+        const fallbackUrl = URL.createObjectURL(file);
+        commitReplace(fallbackUrl);
+      });
+    } catch {
+      const fallbackUrl = URL.createObjectURL(file);
+      commitReplace(fallbackUrl);
     }
   };
 
@@ -503,32 +494,58 @@ export const ClientDashboard: React.FC = () => {
   };
 
   const handleSaveCatalog = () => {
-    if (activeBiosite) {
-      updateBiosite(activeBiosite.id, {
-        ...({
-          catalogs: catalogsList,
-          carouselAutoplay,
-          carouselInterval,
-          address: addressForm.address ? {
-            street: addressForm.address,
-            city: '',
-            state: '',
-            buttonText: addressForm.buttonText,
-            cardBgColor: addressForm.cardBgColor,
-            cardTextColor: addressForm.cardTextColor,
-            buttonBgColor: addressForm.buttonBgColor,
-            buttonTextColor: addressForm.buttonTextColor,
-          } : undefined,
-        } as any),
-      });
-    }
+    if (!activeBiosite) return;
+    const updatedAddress = addressForm.address ? {
+      street: addressForm.address,
+      city: '',
+      state: '',
+      buttonText: addressForm.buttonText,
+      cardBgColor: addressForm.cardBgColor,
+      cardTextColor: addressForm.cardTextColor,
+      buttonBgColor: addressForm.buttonBgColor,
+      buttonTextColor: addressForm.buttonTextColor,
+    } : undefined;
+
+    const updatedSite = {
+      ...activeBiosite,
+      catalogs: catalogsList,
+      catalogSettings: {
+        autoplay: carouselAutoplay,
+        interval: carouselInterval,
+      },
+      address: updatedAddress,
+      locationConfig: {
+        ...activeBiosite.locationConfig,
+        enabled: !!addressForm.address,
+        address: addressForm.address,
+        buttonText: addressForm.buttonText,
+        cardBgColor: addressForm.cardBgColor,
+        cardTextColor: addressForm.cardTextColor,
+        buttonBgColor: addressForm.buttonBgColor,
+        buttonTextColor: addressForm.buttonTextColor,
+        googleMapsUrl: addressForm.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressForm.address)}` : '',
+      }
+    };
+
+    updateBiosite(activeBiosite.id, updatedSite);
     safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));
+
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        biosites: biosites.map(b => b.id === activeBiosite.id ? updatedSite : b),
+        services,
+        creatorProfile,
+      }),
+    }).catch(console.warn);
+
     confetti({
       particleCount: 50,
       spread: 60,
       origin: { y: 0.6 }
     });
-    showToast('Alterações do catálogo salvas com sucesso!', 'success');
+    showToast('Alterações do catálogo salvas com sucesso para todos os dispositivos!', 'success');
   };
 
   // Appointments state for the "Agendamentos" tab
@@ -590,7 +607,8 @@ export const ClientDashboard: React.FC = () => {
   const handleSaveAppearance = () => {
     if (!activeBiosite) return;
 
-    updateBiosite(activeBiosite.id, {
+    const updatedSite = {
+      ...activeBiosite,
       title: appearanceForm.title,
       subtitle: appearanceForm.subtitle,
       description: appearanceForm.description,
@@ -602,17 +620,28 @@ export const ClientDashboard: React.FC = () => {
         primaryTextColor: appearanceForm.primaryTextColor,
         fontFamily: appearanceForm.fontFamily,
       },
-      ...({
-        logoShape: appearanceForm.logoShape,
-        logoTransparent: appearanceForm.logoTransparent,
-        videoUrl: appearanceForm.videoUrl,
-      } as any),
-    });
+      logoShape: appearanceForm.logoShape,
+      logoTransparent: appearanceForm.logoTransparent,
+      videoUrl: appearanceForm.videoUrl,
+    };
+
+    updateBiosite(activeBiosite.id, updatedSite);
+
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        biosites: biosites.map(b => b.id === activeBiosite.id ? updatedSite : b),
+        services,
+        creatorProfile,
+      }),
+    }).catch(console.warn);
+
     confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
-    showToast('Alterações de aparência salvas com sucesso!', 'success');
+    showToast('Alterações de aparência salvas com sucesso para todos os dispositivos!', 'success');
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -621,22 +650,21 @@ export const ClientDashboard: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        const resultUrl = reader.result;
-        setAppearanceForm(prev => ({ ...prev, avatarUrl: resultUrl }));
-        if (activeBiosite) {
-          updateBiosite(activeBiosite.id, { avatarUrl: resultUrl });
-        }
-        showToast('Logo carregada do computador com sucesso!', 'success');
+    try {
+      showToast('Enviando logo...');
+      const uploadedUrl = await uploadMediaFile(file);
+      setAppearanceForm(prev => ({ ...prev, avatarUrl: uploadedUrl }));
+      if (activeBiosite) {
+        updateBiosite(activeBiosite.id, { avatarUrl: uploadedUrl });
       }
-    };
-    reader.readAsDataURL(file);
+      showToast('Logo atualizada com sucesso!', 'success');
+    } catch {
+      showToast('Erro ao enviar imagem', 'error');
+    }
     e.target.value = '';
   };
 
-  const handleCoverImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -645,21 +673,21 @@ export const ClientDashboard: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        const resultUrl = reader.result;
-        setAppearanceForm(prev => ({ ...prev, coverUrl: resultUrl, videoUrl: '' }));
-        if (activeBiosite) {
-          updateBiosite(activeBiosite.id, { 
-            coverUrl: resultUrl,
-            ...({ videoUrl: '' } as any)
-          });
-        }
-        showToast('Imagem de capa carregada do computador com sucesso!', 'success');
+    try {
+      showToast('Enviando imagem de capa...');
+      const uploadedUrl = await uploadMediaFile(file);
+      setAppearanceForm(prev => ({ ...prev, coverUrl: uploadedUrl, videoUrl: '' }));
+      if (activeBiosite) {
+        updateBiosite(activeBiosite.id, { 
+          coverUrl: uploadedUrl,
+          coverType: 'image',
+          ...({ videoUrl: '' } as any)
+        });
       }
-    };
-    reader.readAsDataURL(file);
+      showToast('Imagem de capa salva com sucesso!', 'success');
+    } catch {
+      showToast('Erro ao enviar imagem', 'error');
+    }
     e.target.value = '';
   };
 
@@ -679,31 +707,19 @@ export const ClientDashboard: React.FC = () => {
     }
 
     try {
-      const objectUrl = URL.createObjectURL(file);
-      const siteId = activeBiosite?.id || 'current';
-      
-      // Save to IndexedDB so it persists across refreshes without hitting localStorage quota
-      await saveMedia(`cover_video_${siteId}`, file);
-
-      setAppearanceForm(prev => ({ ...prev, videoUrl: objectUrl }));
+      showToast('Enviando vídeo de capa...');
+      const uploadedUrl = await uploadMediaFile(file);
+      setAppearanceForm(prev => ({ ...prev, videoUrl: uploadedUrl }));
       if (activeBiosite) {
         updateBiosite(activeBiosite.id, { 
-          videoUrl: objectUrl,
+          videoUrl: uploadedUrl,
           coverType: 'video',
         } as any);
       }
-      showToast('Vídeo de capa carregado com sucesso!', 'success');
+      showToast('Vídeo de capa salvo com sucesso!', 'success');
     } catch (err) {
-      console.warn('Erro ao salvar vídeo em IndexedDB, usando URL local:', err);
-      const objectUrl = URL.createObjectURL(file);
-      setAppearanceForm(prev => ({ ...prev, videoUrl: objectUrl }));
-      if (activeBiosite) {
-        updateBiosite(activeBiosite.id, { 
-          videoUrl: objectUrl,
-          coverType: 'video',
-        } as any);
-      }
-      showToast('Vídeo de capa carregado!', 'success');
+      console.warn('Erro ao processar vídeo:', err);
+      showToast('Erro ao enviar vídeo', 'error');
     }
     e.target.value = '';
   };

@@ -8,13 +8,63 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
 const PORT = 3000;
 const DATA_FILE = path.resolve(__dirname, 'src/data/persisted_state.json');
+const UPLOADS_DIR = path.resolve(__dirname, 'public/uploads');
+
+// Ensure directories exist
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 async function startServer() {
   const app = express();
   
   // High body size limit for media/images
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+  // Serve uploads directory statically at /uploads
+  app.use('/uploads', express.static(UPLOADS_DIR));
+
+  // Endpoint to handle permanent file uploads from any device
+  app.post('/api/upload', (req, res) => {
+    try {
+      const { filename, data } = req.body;
+      if (!data) {
+        return res.status(400).json({ error: 'No data provided' });
+      }
+
+      let base64Content = data;
+      let ext = 'jpg';
+
+      if (filename && filename.includes('.')) {
+        ext = filename.split('.').pop() || 'jpg';
+      } else if (data.startsWith('data:image/')) {
+        const match = data.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
+        if (match) ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+      } else if (data.startsWith('data:video/')) {
+        const match = data.match(/^data:video\/([a-zA-Z0-9+]+);base64,/);
+        if (match) ext = match[1];
+      }
+
+      if (data.includes(';base64,')) {
+        base64Content = data.split(';base64,')[1];
+      }
+
+      const cleanExt = ext.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5) || 'jpg';
+      const uniqueName = `media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${cleanExt}`;
+      const filePath = path.join(UPLOADS_DIR, uniqueName);
+      const buffer = Buffer.from(base64Content, 'base64');
+
+      fs.writeFileSync(filePath, buffer);
+      const publicUrl = `/uploads/${uniqueName}`;
+      console.log(`[Server] Saved upload: ${publicUrl} (${buffer.length} bytes)`);
+
+      return res.json({ success: true, url: publicUrl, size: buffer.length });
+    } catch (err: any) {
+      console.error('[Server] Upload processing error:', err);
+      return res.status(500).json({ error: err?.message || 'Failed to save file' });
+    }
+  });
 
   // API to load synced application state for all devices (mobile, incognito, desktop)
   app.get('/api/state', (req, res) => {

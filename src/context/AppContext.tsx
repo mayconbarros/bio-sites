@@ -19,6 +19,7 @@ import {
 } from '../data/mockData';
 import { INITIAL_CLIENTS } from '../data/rbacConstants';
 import { getMediaUrl } from '../utils/mediaStorage';
+import persistedState from '../data/persisted_state.json';
 
 export function safeSetItem(key: string, value: string): void {
   try {
@@ -29,8 +30,9 @@ export function safeSetItem(key: string, value: string): void {
       const parsed = JSON.parse(value);
       const stripLargeStrings = (val: any): any => {
         if (typeof val === 'string') {
-          // If large data URL (>40KB), data:video, or blob: URL, strip to avoid localStorage quota crash
-          if (val.startsWith('data:video/') || (val.startsWith('data:') && val.length > 40000) || val.startsWith('blob:')) {
+          // Never strip server uploaded files (/uploads/...) or http URLs!
+          // Only strip massive base64 strings (>1.5MB) in emergency quota fallback
+          if (val.startsWith('data:') && val.length > 1500000) {
             return '';
           }
           return val;
@@ -121,10 +123,19 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize state with LocalStorage if available
+  // Initialize state with LocalStorage if available or persistedState
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
     const saved = localStorage.getItem('biosaas_biosites');
-    const rawList: Biosite[] = saved ? JSON.parse(saved) : INITIAL_BIOSITES;
+    let rawList: Biosite[] = INITIAL_BIOSITES;
+    if (saved) {
+      try {
+        rawList = JSON.parse(saved);
+      } catch {
+        rawList = (persistedState as any)?.biosites || INITIAL_BIOSITES;
+      }
+    } else if ((persistedState as any)?.biosites?.length) {
+      rawList = (persistedState as any).biosites;
+    }
     return rawList.map(b => {
       let existing = b.contactButtons || [];
       const hasAgendar = existing.some(btn => btn.label?.toLowerCase() === 'agendar' || btn.type === 'Agendar' || btn.id === 'btn-agendar');
