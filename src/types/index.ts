@@ -247,6 +247,7 @@ export interface Biosite {
   pixConfig: PixConfig;
   wifiConfig: WifiConfig;
   locationConfig: LocationConfig;
+  address?: any;
   businessHours: DaySchedule[];
   footerBranding: FooterBranding;
   catalogs?: CatalogSection[];

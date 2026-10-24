@@ -272,11 +272,19 @@ export const ClientDashboard: React.FC = () => {
   const [catalogsList, setCatalogsList] = useState<CatalogSection[]>(() => {
     try {
       const saved = localStorage.getItem('biosaas_catalogs');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return (activeBiosite?.catalogs && activeBiosite.catalogs.length > 0) ? activeBiosite.catalogs : [];
   });
+
+  React.useEffect(() => {
+    if (activeBiosite?.catalogs && activeBiosite.catalogs.length > 0 && catalogsList.length === 0) {
+      setCatalogsList(activeBiosite.catalogs);
+    }
+  }, [activeBiosite?.catalogs]);
 
   React.useEffect(() => {
     safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));

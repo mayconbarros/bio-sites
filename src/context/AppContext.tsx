@@ -171,18 +171,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (path.startsWith('painel')) {
       const slug = path.split('/')[1];
-      const match = siteList.find(s => s.slug?.toLowerCase() === slug?.toLowerCase() || s.id?.toLowerCase() === slug?.toLowerCase());
+      const match = (siteList || []).find(s => s && (s.slug?.toLowerCase() === slug?.toLowerCase() || s.id?.toLowerCase() === slug?.toLowerCase()));
       return {
         view: 'client',
-        siteId: match ? match.id : (siteList[0]?.id || 'bio-bella-nails')
+        siteId: match ? match.id : (siteList?.[0]?.id || 'bio-bella-nails')
       };
     }
 
     const candidate = siteQuery || hash || (path && path !== 'agency' && path !== 'client' && path !== 'login' && path !== 'index.html' ? path : null);
     if (candidate) {
-      const match = siteList.find(s => 
-        s.slug?.toLowerCase() === candidate.toLowerCase() || 
-        s.id?.toLowerCase() === candidate.toLowerCase()
+      const match = (siteList || []).find(s => 
+        s && (s.slug?.toLowerCase() === candidate.toLowerCase() || 
+        s.id?.toLowerCase() === candidate.toLowerCase())
       );
       if (match) {
         return {
@@ -290,10 +290,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      name: 'Vision Local',
+      name: 'MB Web Digital',
       photoUrl: '',
-      linkType: 'whatsapp',
-      linkUrl: 'https://wa.me/5541996958060',
+      linkType: 'site',
+      linkUrl: 'https://mbwebdigital.com.br',
     };
   });
 
@@ -318,6 +318,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'bio-barber-club': { views: 615, clicks: 240, bookings: 38 },
     };
   });
+
+  // Load global state from server for cross-device support (cell phones, incognito tabs, etc.)
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/state')
+      .then(res => res.ok ? res.json() : null)
+      .then(serverState => {
+        if (serverState.biosites && Array.isArray(serverState.biosites)) {
+          const sanitized = serverState.biosites.map((b: any) => ({
+            ...b,
+            businessHours: b.businessHours || [],
+            contactButtons: b.contactButtons || [],
+            catalogs: b.catalogs || [],
+            catalogSettings: b.catalogSettings || { autoplay: true, interval: 5 },
+            locationConfig: b.locationConfig || { enabled: false },
+          }));
+          setBiosites(sanitized);
+          safeSetItem('biosaas_biosites', JSON.stringify(sanitized));
+        }
+        if (serverState.services && Array.isArray(serverState.services)) {
+          setServices(serverState.services);
+          safeSetItem('biosaas_services', JSON.stringify(serverState.services));
+        }
+        if (serverState.creatorProfile) {
+          setCreatorProfile(serverState.creatorProfile);
+          safeSetItem('biosaas_creator_profile', JSON.stringify(serverState.creatorProfile));
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  // Save to server API in background on changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          biosites,
+          services,
+          creatorProfile,
+          agencySettings,
+        }),
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [biosites, services, creatorProfile, agencySettings]);
 
   useEffect(() => {
     safeSetItem('biosaas_biosites', JSON.stringify(biosites));
@@ -627,12 +675,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const activeBiosite = biosites.find(s => s.id === activeBiositeId) || biosites[0];
+  const activeBiosite = (biosites || []).find(s => s && s.id === activeBiositeId) || biosites?.[0];
 
   const navigateView = (view: AppView) => {
     setCurrentView(view);
     if (typeof window !== 'undefined') {
-      const activeSite = biosites.find(s => s.id === activeBiositeId) || biosites[0];
+      const activeSite = (biosites || []).find(s => s && s.id === activeBiositeId) || biosites?.[0];
       if (view === 'login') {
         if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
           window.history.pushState({}, '', '/');

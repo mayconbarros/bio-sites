@@ -162,7 +162,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
   const getOpenStatus = () => {
     const now = new Date();
     const currentDay = now.getDay();
-    const currentSchedule = biosite.businessHours.find(h => h.dayOfWeek === currentDay);
+    const currentSchedule = (biosite?.businessHours || []).find(h => h.dayOfWeek === currentDay);
 
     if (!currentSchedule || currentSchedule.closed) {
       return { isOpen: false, text: 'Fechado hoje' };
