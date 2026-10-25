@@ -1,7 +1,10 @@
 /**
  * Client-side file uploader.
- * Sends files to the server's /api/upload endpoint, generating a permanent public URL (/uploads/xyz.jpg)
- * that is accessible from ANY device (mobile, incognito, desktop) and never blows localStorage quota.
+ * Envia arquivos para o endpoint /api/upload no backend, que realiza o upload
+ * direto para a nuvem (Cloudinary ou Vercel Blob) e retorna uma URL pública definitiva (https://...).
+ * 
+ * Regra de Ouro: NUNCA retorna ou salva dados em Base64 bruto no PostgreSQL / Neon,
+ * prevenindo estouro de banco ou lentidão no carregamento.
  */
 export async function uploadMediaFile(file: File | Blob, originalFilename?: string): Promise<string> {
   const name = originalFilename || (file instanceof File ? file.name : 'upload.jpg');
@@ -12,7 +15,7 @@ export async function uploadMediaFile(file: File | Blob, originalFilename?: stri
       try {
         const base64Data = reader.result as string;
 
-        // Upload to server endpoint
+        // Envia para o backend para envio ao Cloudinary / Vercel Blob
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -22,23 +25,27 @@ export async function uploadMediaFile(file: File | Blob, originalFilename?: stri
           }),
         });
 
-        if (res.ok) {
-          const json = await res.json();
-          if (json.url) {
-            console.log('[uploadMediaFile] File uploaded successfully to permanent URL:', json.url);
-            return resolve(json.url);
-          }
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          const errMsg = errData?.error || `Erro HTTP ${res.status} no upload da imagem`;
+          console.error('[uploadMediaFile] Falha no upload:', errMsg);
+          return reject(new Error(errMsg));
         }
 
-        // Fallback to base64 data URL if server unreachable
-        console.warn('[uploadMediaFile] Server returned non-ok, falling back to data URL');
-        resolve(base64Data);
-      } catch (err) {
-        console.warn('[uploadMediaFile] Failed to upload to server, falling back to data URL:', err);
-        resolve(reader.result as string);
+        const json = await res.json();
+        if (json.url && typeof json.url === 'string') {
+          console.log('[uploadMediaFile] Arquivo salvo na nuvem com URL pública:', json.url, `(Provedor: ${json.provider || 'cloud'})`);
+          return resolve(json.url);
+        }
+
+        reject(new Error('Servidor não retornou uma URL válida para a mídia.'));
+      } catch (err: any) {
+        console.error('[uploadMediaFile] Erro de rede ou processamento no upload:', err);
+        reject(err instanceof Error ? err : new Error(String(err)));
       }
     };
-    reader.onerror = (err) => reject(err);
+
+    reader.onerror = (err) => reject(new Error('Erro ao ler o arquivo no navegador.'));
     reader.readAsDataURL(file);
   });
 }

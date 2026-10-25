@@ -166,8 +166,6 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
-              localStorage.setItem('biosaas_biosites', JSON.stringify(biosites));
-              localStorage.setItem('biosaas_services', JSON.stringify(services));
               if (e.metaKey || e.ctrlKey || e.button === 1) return;
               try {
                 const url = `/${biosite.slug}`;

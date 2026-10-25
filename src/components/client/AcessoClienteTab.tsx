@@ -74,26 +74,32 @@ export const AcessoClienteTab: React.FC = () => {
   // Storage key
   const storageKey = `biosaas_acessos_liberados_${activeBiosite?.id || 'default'}`;
 
-  // Carregar lista salva ao montar
+  // Carregar lista salva a partir dos clientes sincronizados com o Neon
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        setGrantedList(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error('Erro ao ler acessos liberados:', e);
+    if (!activeBiosite) return;
+    const siteClients = clients
+      .filter(c => c.assignedBiositeIds?.includes(activeBiosite.id))
+      .map(c => ({
+        id: c.id,
+        email: c.email,
+        permissions: c.permissions || [],
+        createdAt: c.createdAt,
+        temporaryPassword: c.temporaryPassword || 'SenhaSegura123!',
+      }));
+    if (siteClients.length > 0) {
+      setGrantedList(siteClients);
     }
-  }, [storageKey]);
+  }, [activeBiosite?.id, clients]);
 
-  // Salvar no localStorage
+  // Atualizar permissões diretamente no estado global e Neon
   const saveGrantedList = (list: GrantedAccess[]) => {
     setGrantedList(list);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(list));
-    } catch (e) {
-      console.error('Erro ao salvar acessos:', e);
-    }
+    list.forEach(item => {
+      const existingClient = clients.find(c => c.id === item.id || c.email === item.email);
+      if (existingClient) {
+        updateClient(existingClient.id, { permissions: item.permissions });
+      }
+    });
   };
 
   const showToast = (msg: string) => {

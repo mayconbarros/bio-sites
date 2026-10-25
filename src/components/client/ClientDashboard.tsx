@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp, safeSetItem } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { saveMedia, deleteMedia } from '../../utils/mediaStorage';
 import { uploadMediaFile } from '../../utils/uploadMedia';
 import { Biosite, Appointment, AppointmentStatus, Service, CatalogItem, CatalogSection, isItemVideo, DaySchedule } from '../../types';
@@ -271,25 +271,18 @@ export const ClientDashboard: React.FC = () => {
   const [carouselAutoplay, setCarouselAutoplay] = useState<boolean>(true);
   const [carouselInterval, setCarouselInterval] = useState<number>(5);
   const [catalogsList, setCatalogsList] = useState<CatalogSection[]>(() => {
-    try {
-      const saved = localStorage.getItem('biosaas_catalogs');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
     return (activeBiosite?.catalogs && activeBiosite.catalogs.length > 0) ? activeBiosite.catalogs : [];
   });
 
   React.useEffect(() => {
-    if (activeBiosite?.catalogs && activeBiosite.catalogs.length > 0 && catalogsList.length === 0) {
+    if (activeBiosite?.catalogs) {
       setCatalogsList(activeBiosite.catalogs);
     }
-  }, [activeBiosite?.catalogs]);
-
-  React.useEffect(() => {
-    safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));
-  }, [catalogsList]);
+    if (activeBiosite?.catalogSettings) {
+      setCarouselAutoplay(activeBiosite.catalogSettings.autoplay ?? true);
+      setCarouselInterval(activeBiosite.catalogSettings.interval ?? 5);
+    }
+  }, [activeBiosite?.id, activeBiosite?.catalogs, activeBiosite?.updatedAt]);
 
   const [isNewCatalogModalOpen, setIsNewCatalogModalOpen] = useState(false);
   const [newCatalogTitle, setNewCatalogTitle] = useState('Nossos serviços');
@@ -392,18 +385,16 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    try {
-      showToast('Enviando mídia...');
-      uploadMediaFile(file).then(uploadedUrl => {
+    showToast('Enviando mídia para a nuvem...');
+    uploadMediaFile(file)
+      .then(uploadedUrl => {
         commitItem(uploadedUrl);
-      }).catch(() => {
-        const fallbackUrl = URL.createObjectURL(file);
-        commitItem(fallbackUrl);
+        showToast(isVideo ? 'Vídeo enviado com sucesso para a nuvem!' : 'Imagem enviada com sucesso para a nuvem!', 'success');
+      })
+      .catch((err: any) => {
+        console.error('[Upload Catálogo] Erro:', err);
+        showToast(`Erro ao enviar mídia: ${err?.message || 'Falha no upload'}`, 'error');
       });
-    } catch {
-      const fallbackUrl = URL.createObjectURL(file);
-      commitItem(fallbackUrl);
-    }
   };
 
   const handleReplaceItemFile = (catId: string, itemId: string, file: File) => {
@@ -422,18 +413,16 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    try {
-      showToast('Enviando mídia atualizada...');
-      uploadMediaFile(file).then(uploadedUrl => {
+    showToast('Enviando nova mídia para a nuvem...');
+    uploadMediaFile(file)
+      .then(uploadedUrl => {
         commitReplace(uploadedUrl);
-      }).catch(() => {
-        const fallbackUrl = URL.createObjectURL(file);
-        commitReplace(fallbackUrl);
+        showToast('Mídia substituída e salva na nuvem!', 'success');
+      })
+      .catch((err: any) => {
+        console.error('[Upload Substituição] Erro:', err);
+        showToast(`Erro ao substituir mídia: ${err?.message || 'Falha no upload'}`, 'error');
       });
-    } catch {
-      const fallbackUrl = URL.createObjectURL(file);
-      commitReplace(fallbackUrl);
-    }
   };
 
   const handleAddItemToCatalog = (catId: string, type: 'image' | 'video' | 'tour') => {
@@ -493,7 +482,7 @@ export const ClientDashboard: React.FC = () => {
     showToast('Item excluído');
   };
 
-  const handleSaveCatalog = () => {
+  const handleSaveCatalog = async () => {
     if (!activeBiosite) return;
     const updatedAddress = addressForm.address ? {
       street: addressForm.address,
@@ -527,25 +516,18 @@ export const ClientDashboard: React.FC = () => {
       }
     };
 
-    updateBiosite(activeBiosite.id, updatedSite);
-    safeSetItem('biosaas_catalogs', JSON.stringify(catalogsList));
-
-    fetch('/api/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        biosites: biosites.map(b => b.id === activeBiosite.id ? updatedSite : b),
-        services,
-        creatorProfile,
-      }),
-    }).catch(console.warn);
-
-    confetti({
-      particleCount: 50,
-      spread: 60,
-      origin: { y: 0.6 }
-    });
-    showToast('Alterações do catálogo salvas com sucesso para todos os dispositivos!', 'success');
+    try {
+      showToast('Salvando catálogo no banco Neon...');
+      await updateBiosite(activeBiosite.id, updatedSite);
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.6 }
+      });
+      showToast('Alterações do catálogo salvas com sucesso para todos os dispositivos!', 'success');
+    } catch {
+      showToast('Erro ao salvar catálogo no banco de dados', 'error');
+    }
   };
 
   // Appointments state for the "Agendamentos" tab
@@ -593,7 +575,7 @@ export const ClientDashboard: React.FC = () => {
         avatarUrl: activeBiosite.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80',
       });
     }
-  }, [activeBiosite?.id]);
+  }, [activeBiosite?.id, activeBiosite?.updatedAt, activeBiosite?.title, activeBiosite?.avatarUrl, activeBiosite?.coverUrl, activeBiosite?.themeConfig?.primaryColor]);
 
   const FONT_OPTIONS = [
     { id: 'Space Grotesk, sans-serif', name: 'Padrão (Space Grotesk)' },
@@ -604,7 +586,7 @@ export const ClientDashboard: React.FC = () => {
     { id: 'Montserrat, sans-serif', name: 'Montserrat' },
   ];
 
-  const handleSaveAppearance = () => {
+  const handleSaveAppearance = async () => {
     if (!activeBiosite) return;
 
     const updatedSite = {
@@ -625,20 +607,14 @@ export const ClientDashboard: React.FC = () => {
       videoUrl: appearanceForm.videoUrl,
     };
 
-    updateBiosite(activeBiosite.id, updatedSite);
-
-    fetch('/api/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        biosites: biosites.map(b => b.id === activeBiosite.id ? updatedSite : b),
-        services,
-        creatorProfile,
-      }),
-    }).catch(console.warn);
-
-    confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
-    showToast('Alterações de aparência salvas com sucesso para todos os dispositivos!', 'success');
+    try {
+      showToast('Salvando aparência no banco Neon...');
+      await updateBiosite(activeBiosite.id, updatedSite);
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
+      showToast('Alterações de aparência salvas com sucesso para todos os dispositivos!', 'success');
+    } catch {
+      showToast('Erro ao salvar aparência no banco de dados', 'error');
+    }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -836,9 +812,67 @@ export const ClientDashboard: React.FC = () => {
         enabled: activeBiosite.locationConfig.enabled ?? !!activeBiosite.locationConfig.address,
       });
     }
-  }, [activeBiosite?.id]);
 
-  const handleSaveAddress = () => {
+    if (activeBiosite) {
+      const rawButtons = activeBiosite.contactButtons || [];
+      const existing = rawButtons
+        .filter(b => b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' && b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi')
+        .map(b => ({
+          ...b,
+          type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
+          displayMode: 'full_button',
+          pulseEffect: b.pulseEffect || false,
+          bgColor: b.bgColor || 'padrão',
+          textColor: b.textColor || 'padrão',
+        }));
+
+      const hasBooking = existing.some(b => b.id === 'btn-booking' || b.type === 'Agendar' || (b as any).isSpecial === 'booking');
+      const fullList = [...existing];
+      if (!hasBooking) {
+        fullList.unshift({
+          id: 'btn-booking',
+          label: 'Agendar Horário Online',
+          icon: 'Sparkles',
+          lucideIcon: 'Sparkles',
+          url: '#agendar',
+          isWhatsApp: false,
+          type: 'Agendar',
+          isSpecial: 'booking',
+          active: true,
+          displayMode: 'full_button',
+          pulseEffect: false,
+          bgColor: 'padrão',
+          textColor: 'padrão',
+        });
+      }
+      setButtonsList(fullList);
+
+      if (activeBiosite.pixConfig) {
+        setPixForm({
+          keyType: activeBiosite.pixConfig.keyType || '',
+          pixKey: activeBiosite.pixConfig.pixKey || '',
+          instantPix: (activeBiosite.pixConfig as any)?.instantPix || false,
+          hasCardBg: (activeBiosite.pixConfig as any)?.hasCardBg || false,
+          cardTextColor: activeBiosite.pixConfig.cardTextColor || 'padrão',
+          buttonBgColor: activeBiosite.pixConfig.buttonBgColor || 'padrão',
+          buttonTextColor: activeBiosite.pixConfig.buttonTextColor || 'padrão',
+        });
+      }
+
+      if (activeBiosite.wifiConfig) {
+        setWifiForm({
+          networkName: activeBiosite.wifiConfig.networkName || '',
+          password: activeBiosite.wifiConfig.password || '',
+          hasCardBg: (activeBiosite.wifiConfig as any)?.hasCardBg || false,
+          cardTextColor: activeBiosite.wifiConfig.cardTextColor || 'padrão',
+          buttonBgColor: activeBiosite.wifiConfig.buttonBgColor || 'padrão',
+          buttonTextColor: activeBiosite.wifiConfig.buttonTextColor || 'padrão',
+        });
+      }
+    }
+  }, [activeBiosite?.id, activeBiosite?.updatedAt, activeBiosite?.contactButtons, activeBiosite?.locationConfig]);
+
+  const handleSaveAddress = async () => {
     if (!activeBiosite) return;
     const trimmed = addressForm.address.trim();
     const mapsUrl = trimmed
@@ -856,10 +890,15 @@ export const ClientDashboard: React.FC = () => {
       enabled: !!trimmed,
     };
     setAddressForm(prev => ({ ...prev, enabled: !!trimmed }));
-    updateBiosite(activeBiosite.id, { locationConfig: newLocationConfig });
-    showToast('Endereço salvo com sucesso!', 'success');
-    setFloatingToast('Endereço salvo com sucesso!');
-    setTimeout(() => setFloatingToast(null), 3000);
+    try {
+      showToast('Salvando endereço no banco Neon...');
+      await updateBiosite(activeBiosite.id, { locationConfig: newLocationConfig });
+      showToast('Endereço salvo com sucesso no banco de dados!', 'success');
+      setFloatingToast('Endereço salvo com sucesso!');
+      setTimeout(() => setFloatingToast(null), 3000);
+    } catch {
+      showToast('Erro ao salvar endereço no banco Neon', 'error');
+    }
   };
 
   const handleTestMaps = () => {
@@ -1173,35 +1212,40 @@ export const ClientDashboard: React.FC = () => {
     setHasUnsavedButtonChanges(true);
   };
 
-  const handleSaveButtons = () => {
+  const handleSaveButtons = async () => {
     if (!activeBiosite) return;
-    updateBiosite(activeBiosite.id, {
-      contactButtons: buttonsList,
-      pixConfig: {
-        ...activeBiosite.pixConfig,
-        keyType: (pixForm.keyType || 'cnpj') as any,
-        pixKey: pixForm.pixKey,
-        instantPix: pixForm.instantPix,
-        hasCardBg: pixForm.hasCardBg,
-        cardTextColor: pixForm.cardTextColor,
-        buttonBgColor: pixForm.buttonBgColor,
-        buttonTextColor: pixForm.buttonTextColor,
-        enabled: !!pixForm.pixKey,
-      },
-      wifiConfig: {
-        ...activeBiosite.wifiConfig,
-        networkName: wifiForm.networkName,
-        password: wifiForm.password,
-        hasCardBg: wifiForm.hasCardBg,
-        cardTextColor: wifiForm.cardTextColor,
-        buttonBgColor: wifiForm.buttonBgColor,
-        buttonTextColor: wifiForm.buttonTextColor,
-        enabled: !!wifiForm.networkName,
-      },
-    });
-    setHasUnsavedButtonChanges(false);
-    confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
-    showToast('Alterações salvas com sucesso!', 'success');
+    try {
+      showToast('Salvando botões no banco Neon...');
+      await updateBiosite(activeBiosite.id, {
+        contactButtons: buttonsList,
+        pixConfig: {
+          ...activeBiosite.pixConfig,
+          keyType: (pixForm.keyType || 'cnpj') as any,
+          pixKey: pixForm.pixKey,
+          instantPix: pixForm.instantPix,
+          hasCardBg: pixForm.hasCardBg,
+          cardTextColor: pixForm.cardTextColor,
+          buttonBgColor: pixForm.buttonBgColor,
+          buttonTextColor: pixForm.buttonTextColor,
+          enabled: !!pixForm.pixKey,
+        },
+        wifiConfig: {
+          ...activeBiosite.wifiConfig,
+          networkName: wifiForm.networkName,
+          password: wifiForm.password,
+          hasCardBg: wifiForm.hasCardBg,
+          cardTextColor: wifiForm.cardTextColor,
+          buttonBgColor: wifiForm.buttonBgColor,
+          buttonTextColor: wifiForm.buttonTextColor,
+          enabled: !!wifiForm.networkName,
+        },
+      });
+      setHasUnsavedButtonChanges(false);
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
+      showToast('Botões e integrações salvos no banco de dados!', 'success');
+    } catch {
+      showToast('Erro ao salvar botões no banco Neon', 'error');
+    }
   };
 
   const previewBiosite: Biosite | undefined = activeBiosite ? {
@@ -1682,11 +1726,6 @@ export const ClientDashboard: React.FC = () => {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
-              if (activeBiosite) {
-                safeSetItem('biosaas_biosites', JSON.stringify(biosites));
-                safeSetItem('biosaas_services', JSON.stringify(services));
-                safeSetItem('biosaas_appointments', JSON.stringify(appointments));
-              }
               if (e.metaKey || e.ctrlKey || e.button === 1) return;
               try {
                 const url = `/${activeBiosite.slug}`;

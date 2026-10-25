@@ -71,8 +71,8 @@ interface AppContextType {
   setAgencyActiveTab: (tab: 'sites' | 'clients' | 'profile' | 'links') => void;
   clients: ClientUser[];
   addClient: (data: Omit<ClientUser, 'id' | 'createdAt'>) => ClientUser;
-  updateClient: (id: string, data: Partial<ClientUser>) => void;
-  deleteClient: (id: string) => void;
+  updateClient: (id: string, data: Partial<ClientUser>) => Promise<void>;
+  deleteClient: (id: string) => Promise<void>;
   creatorProfile: CreatorProfile;
   updateCreatorProfile: (profile: Partial<CreatorProfile>) => void;
   activeBiositeId: string;
@@ -88,8 +88,8 @@ interface AppContextType {
 
   updateAgencySettings: (settings: Partial<AgencySettings>) => void;
   addBiosite: (data: Partial<Biosite>) => Biosite;
-  updateBiosite: (id: string, data: Partial<Biosite>) => void;
-  deleteBiosite: (id: string) => void;
+  updateBiosite: (id: string, data: Partial<Biosite>) => Promise<void>;
+  deleteBiosite: (id: string) => Promise<void>;
   duplicateBiosite: (id: string) => void;
 
   addService: (data: Omit<Service, 'id'>) => Service;
@@ -123,19 +123,9 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize state with LocalStorage if available or persistedState
+  // Inicialização com estado base; dados completos são sincronizados da API Neon em seguida
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
-    const saved = localStorage.getItem('biosaas_biosites');
-    let rawList: Biosite[] = INITIAL_BIOSITES;
-    if (saved) {
-      try {
-        rawList = JSON.parse(saved);
-      } catch {
-        rawList = (persistedState as any)?.biosites || INITIAL_BIOSITES;
-      }
-    } else if ((persistedState as any)?.biosites?.length) {
-      rawList = (persistedState as any).biosites;
-    }
+    let rawList: Biosite[] = (persistedState as any)?.biosites || INITIAL_BIOSITES;
     return rawList.map(b => {
       let existing = b.contactButtons || [];
       const hasAgendar = existing.some(btn => btn.label?.toLowerCase() === 'agendar' || btn.type === 'Agendar' || btn.id === 'btn-agendar');
@@ -241,19 +231,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [clients, setClients] = useState<ClientUser[]>(() => {
-    try {
-      const saved = localStorage.getItem('biosaas_clients');
-      return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
-    } catch {
-      return INITIAL_CLIENTS;
-    }
+    return (persistedState as any)?.clients || INITIAL_CLIENTS;
   });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('biosaas_clients', JSON.stringify(clients));
-    } catch {}
-  }, [clients]);
 
   const addClient = (data: Omit<ClientUser, 'id' | 'createdAt'>): ClientUser => {
     const newClient: ClientUser = {
@@ -267,53 +246,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newClient),
-    }).catch(console.warn);
-    showToast(`Cliente "${newClient.name}" cadastrado com sucesso!`, 'success');
+    })
+      .then(() => showToast(`Cliente "${newClient.name}" cadastrado e salvo no banco Neon!`, 'success'))
+      .catch(e => console.warn('[addClient] Erro ao salvar:', e));
     return newClient;
   };
 
-  const updateClient = (id: string, data: Partial<ClientUser>) => {
+  const updateClient = async (id: string, data: Partial<ClientUser>): Promise<void> => {
     setClients(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
-    fetch(`/api/clients/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).catch(console.warn);
-    showToast('Dados do cliente atualizados!', 'success');
+    try {
+      await fetch(`/api/clients/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      showToast('Dados do cliente atualizados no banco!', 'success');
+    } catch (e) {
+      console.warn('[updateClient] Erro ao salvar:', e);
+    }
   };
 
-  const deleteClient = (id: string) => {
+  const deleteClient = async (id: string): Promise<void> => {
     setClients(prev => prev.filter(c => c.id !== id));
-    fetch(`/api/clients/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    }).catch(console.warn);
-    showToast('Cliente removido com sucesso!', 'info');
+    try {
+      await fetch(`/api/clients/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      showToast('Cliente removido do banco com sucesso!', 'info');
+    } catch (e) {
+      console.warn('[deleteClient] Erro ao deletar:', e);
+    }
   };
 
   const [services, setServices] = useState<Service[]>(() => {
-    const saved = localStorage.getItem('biosaas_services');
-    const parsed = saved ? JSON.parse(saved) : null;
-    return (parsed && parsed.length > 0) ? parsed : INITIAL_SERVICES;
+    return (persistedState as any)?.services || INITIAL_SERVICES;
   });
 
   const [professionals, setProfessionals] = useState<Professional[]>(() => {
-    const saved = localStorage.getItem('biosaas_professionals');
-    return saved ? JSON.parse(saved) : [];
+    return (persistedState as any)?.professionals || [];
   });
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
-    const saved = localStorage.getItem('biosaas_appointments');
-    return saved ? JSON.parse(saved) : INITIAL_APPOINTMENTS;
+    return (persistedState as any)?.appointments || INITIAL_APPOINTMENTS;
   });
 
   const [agencyActiveTab, setAgencyActiveTab] = useState<'sites' | 'clients' | 'profile' | 'links'>('sites');
 
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile>(() => {
-    try {
-      const saved = localStorage.getItem('biosaas_creator_profile');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
+    return (persistedState as any)?.creatorProfile || {
       name: 'MB Web Digital',
       photoUrl: '',
       linkType: 'site',
@@ -324,14 +304,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCreatorProfile = (profile: Partial<CreatorProfile>) => {
     setCreatorProfile(prev => {
       const next = { ...prev, ...profile };
-      safeSetItem('biosaas_creator_profile', JSON.stringify(next));
       return next;
     });
   };
 
   const [agencySettings, setAgencySettings] = useState<AgencySettings>(() => {
-    const saved = localStorage.getItem('biosaas_agency');
-    return saved ? JSON.parse(saved) : INITIAL_AGENCY_SETTINGS;
+    return (persistedState as any)?.agencySettings || INITIAL_AGENCY_SETTINGS;
   });
 
   // Track events in memory/localStorage for analytics
@@ -343,13 +321,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  // Load global state from server for cross-device support (cell phones, incognito tabs, etc.)
+  const [isInitialStateLoaded, setIsInitialStateLoaded] = useState(false);
+
+  // Carrega o estado global diretamente da API do servidor/Neon ao iniciar
   useEffect(() => {
     let isMounted = true;
     fetch('/api/state')
       .then(res => res.ok ? res.json() : null)
       .then(serverState => {
-        if (!isMounted || !serverState) return;
+        if (!isMounted || !serverState) {
+          setIsInitialStateLoaded(true);
+          return;
+        }
         if (serverState.biosites && Array.isArray(serverState.biosites) && serverState.biosites.length > 0) {
           const sanitized = serverState.biosites.map((b: any) => ({
             ...b,
@@ -360,39 +343,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             locationConfig: b.locationConfig || { enabled: false },
           }));
           setBiosites(sanitized);
-          safeSetItem('biosaas_biosites', JSON.stringify(sanitized));
         }
         if (serverState.clients && Array.isArray(serverState.clients) && serverState.clients.length > 0) {
           setClients(serverState.clients);
-          safeSetItem('biosaas_clients', JSON.stringify(serverState.clients));
         }
         if (serverState.services && Array.isArray(serverState.services)) {
           setServices(serverState.services);
-          safeSetItem('biosaas_services', JSON.stringify(serverState.services));
         }
         if (serverState.professionals && Array.isArray(serverState.professionals)) {
           setProfessionals(serverState.professionals);
-          safeSetItem('biosaas_professionals', JSON.stringify(serverState.professionals));
         }
         if (serverState.appointments && Array.isArray(serverState.appointments)) {
           setAppointments(serverState.appointments);
-          safeSetItem('biosaas_appointments', JSON.stringify(serverState.appointments));
         }
         if (serverState.creatorProfile) {
           setCreatorProfile(serverState.creatorProfile);
-          safeSetItem('biosaas_creator_profile', JSON.stringify(serverState.creatorProfile));
         }
         if (serverState.agencySettings) {
           setAgencySettings(serverState.agencySettings);
-          safeSetItem('biosaas_agency', JSON.stringify(serverState.agencySettings));
         }
+        setIsInitialStateLoaded(true);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('[AppContext] Aviso ao carregar estado do servidor:', err);
+        setIsInitialStateLoaded(true);
+      });
     return () => { isMounted = false; };
   }, []);
 
-  // Save to server API in background on changes
+  // Salva no banco de dados via API em background apenas APÓS o carregamento inicial ter terminado
   useEffect(() => {
+    if (!isInitialStateLoaded) return;
     const timer = setTimeout(() => {
       fetch('/api/state', {
         method: 'POST',
@@ -406,34 +387,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           creatorProfile,
           agencySettings,
         }),
-      }).catch(() => {});
+      }).catch(console.warn);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [biosites, clients, services, professionals, appointments, creatorProfile, agencySettings]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_biosites', JSON.stringify(biosites));
-  }, [biosites]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_services', JSON.stringify(services));
-  }, [services]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_professionals', JSON.stringify(professionals));
-  }, [professionals]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_appointments', JSON.stringify(appointments));
-  }, [appointments]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_agency', JSON.stringify(agencySettings));
-  }, [agencySettings]);
-
-  useEffect(() => {
-    safeSetItem('biosaas_events', JSON.stringify(eventCounts));
-  }, [eventCounts]);
+  }, [isInitialStateLoaded, biosites, clients, services, professionals, appointments, creatorProfile, agencySettings]);
 
   // Hydrate stored cover videos from IndexedDB
   useEffect(() => {
@@ -522,34 +479,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSite),
-    }).catch(console.warn);
-    showToast(`Bio Site "${newSite.title}" criado com sucesso!`);
+    })
+      .then(() => showToast(`Bio Site "${newSite.title}" criado e salvo no banco!`))
+      .catch(e => console.warn('[addBiosite] Erro ao salvar:', e));
     return newSite;
   };
 
-  const updateBiosite = (id: string, data: Partial<Biosite>) => {
+  const updateBiosite = async (id: string, data: Partial<Biosite>): Promise<void> => {
     const updatedPayload = { ...data, updatedAt: new Date().toISOString() };
     setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...updatedPayload } : site));
-    fetch(`/api/biosites/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedPayload),
-    }).catch(console.warn);
-    showToast('Alterações salvas com sucesso!');
+    try {
+      const res = await fetch(`/api/biosites/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPayload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Alterações salvas com sucesso no banco de dados!');
+    } catch (e) {
+      console.error('[updateBiosite] Erro ao salvar:', e);
+      showToast('Erro ao salvar alterações no banco Neon', 'error');
+    }
   };
 
-  const deleteBiosite = (id: string) => {
+  const deleteBiosite = async (id: string): Promise<void> => {
     setBiosites(prev => prev.filter(site => site.id !== id));
     setServices(prev => prev.filter(service => service.biositeId !== id));
     setAppointments(prev => prev.filter(app => app.biositeId !== id));
-    fetch(`/api/biosites/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    }).catch(console.warn);
     if (activeBiositeId === id && biosites.length > 1) {
       const remaining = biosites.filter(s => s.id !== id);
       setActiveBiositeId(remaining[0]?.id || '');
     }
-    showToast('Bio Site removido!');
+    try {
+      await fetch(`/api/biosites/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      showToast('Bio Site removido do banco!');
+    } catch (e) {
+      console.warn('[deleteBiosite] Erro ao deletar:', e);
+    }
   };
 
   const duplicateBiosite = (id: string) => {

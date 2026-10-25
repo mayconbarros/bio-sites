@@ -5,9 +5,100 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { neon } from '@neondatabase/serverless';
+import { put } from '@vercel/blob';
 
 // Load environment variables (.env, .env.local, etc.)
 dotenv.config();
+
+// -----------------------------------------------------------------------------
+// Sanitização de Variáveis de Ambiente para Cloudinary
+// Remove prefixos acidentais (ex: CLOUDINARY_URL=cloudinary://...), espaços ou placeholders
+// que fazem o SDK do Cloudinary lançar exceções não tratadas durante o boot.
+// -----------------------------------------------------------------------------
+function sanitizeCloudinaryEnvironment(): { isValid: boolean; url?: string } {
+  const raw = process.env.CLOUDINARY_URL;
+  if (!raw) {
+    const hasKeys = Boolean(
+      process.env.CLOUDINARY_CLOUD_NAME && 
+      process.env.CLOUDINARY_API_KEY && 
+      process.env.CLOUDINARY_API_SECRET
+    );
+    return { isValid: hasKeys };
+  }
+
+  let cleaned = raw.trim();
+  // Se o usuário colou a linha inteira incluindo "CLOUDINARY_URL="
+  if (cleaned.startsWith('CLOUDINARY_URL=')) {
+    cleaned = cleaned.substring('CLOUDINARY_URL='.length).trim();
+  }
+
+  // Se o valor for um placeholder como <your_api_key> ou não iniciar com cloudinary://
+  const isPlaceholder = cleaned.includes('<your_api_key>') || 
+                        cleaned.includes('<your_api_secret>') || 
+                        cleaned.includes('<api_key>') || 
+                        cleaned.includes('<cloud_name>');
+
+  if (!cleaned.toLowerCase().startsWith('cloudinary://') || isPlaceholder) {
+    console.warn('[Cloudinary] AVISO: CLOUDINARY_URL no ambiente contém formato inválido ou placeholders. Desativando provedor Cloudinary até credenciais válidas serem configuradas.');
+    delete process.env.CLOUDINARY_URL;
+    return { isValid: false };
+  }
+
+  process.env.CLOUDINARY_URL = cleaned;
+  return { isValid: true, url: cleaned };
+}
+
+// Executa sanitização logo após carregar dotenv
+const cloudinaryEnvState = sanitizeCloudinaryEnvironment();
+
+let hasCloudinary = cloudinaryEnvState.isValid;
+let cloudinaryModule: any = null;
+
+async function getCloudinaryClient() {
+  if (cloudinaryModule) return cloudinaryModule;
+  if (!hasCloudinary) return null;
+
+  try {
+    const mod = await import('cloudinary');
+    const client = mod.v2 || (mod as any).default?.v2 || mod;
+
+    if (process.env.CLOUDINARY_URL) {
+      client.config({
+        cloudinary_url: process.env.CLOUDINARY_URL,
+        secure: true,
+      });
+    } else if (process.env.CLOUDINARY_CLOUD_NAME) {
+      client.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+        secure: true,
+      });
+    }
+
+    cloudinaryModule = client;
+    console.log('[Cloudinary] Provedor de armazenamento na nuvem Cloudinary ATIVO!');
+    return cloudinaryModule;
+  } catch (err: any) {
+    console.warn('[Cloudinary] Falha ao inicializar SDK do Cloudinary:', err?.message);
+    hasCloudinary = false;
+    return null;
+  }
+}
+
+// Inicializa de forma segura em background se configurado
+if (hasCloudinary) {
+  getCloudinaryClient().catch(() => {});
+}
+
+const hasVercelBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+if (hasVercelBlob) {
+  console.log('[Vercel Blob] Provedor de armazenamento Vercel Blob ATIVO!');
+}
+
+if (!hasCloudinary && !hasVercelBlob) {
+  console.warn('[Storage Nuvem] AVISO: Nenhuma credencial de Cloudinary ou Vercel Blob configurada. Os uploads serão armazenados no diretório local /uploads. Para produção na Vercel, configure CLOUDINARY_URL no .env');
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
@@ -20,7 +111,9 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// -----------------------------------------------------------------------------
 // Neon PostgreSQL client initialization
+// -----------------------------------------------------------------------------
 const databaseUrl = process.env.DATABASE_URL;
 const sql = databaseUrl ? neon(databaseUrl) : null;
 
@@ -482,15 +575,86 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // -----------------------------------------------------------------------------
-// Rota de Upload de Mídias
+// Rota de Upload de Mídias na Nuvem (Cloudinary / Vercel Blob / Fallback Local)
 // -----------------------------------------------------------------------------
-app.post('/api/upload', (req: Request, res: Response) => {
+app.post('/api/upload', async (req: Request, res: Response) => {
   try {
     const { filename, data } = req.body;
     if (!data) {
-      return res.status(400).json({ error: 'Nenhum dado enviado' });
+      return res.status(400).json({ error: 'Nenhum dado enviado para upload.' });
     }
 
+    // 1. Prioridade: Cloudinary (Recomendado para imagens e mídias de alta escala)
+    if (hasCloudinary) {
+      try {
+        const client = await getCloudinaryClient();
+        if (client) {
+          console.log('[Cloudinary] Enviando mídia para Cloudinary...');
+          const uploadResult = await client.uploader.upload(data, {
+            folder: 'biosaas_catalog',
+            resource_type: 'auto',
+          });
+
+          console.log(`[Cloudinary] Sucesso! URL pública gerada: ${uploadResult.secure_url}`);
+          return res.json({
+            success: true,
+            url: uploadResult.secure_url,
+            provider: 'cloudinary',
+            bytes: uploadResult.bytes,
+          });
+        }
+      } catch (cloudErr: any) {
+        console.error('[Cloudinary] Erro no upload:', cloudErr);
+        if (!hasVercelBlob) {
+          return res.status(500).json({
+            error: `Erro no upload para o Cloudinary: ${cloudErr?.message || 'Falha de comunicação'}`
+          });
+        }
+      }
+    }
+
+    // 2. Segunda opção: Vercel Blob
+    if (hasVercelBlob) {
+      try {
+        console.log('[Vercel Blob] Enviando mídia para Vercel Blob...');
+        let base64Content = data;
+        let ext = 'jpg';
+        let mimeType = 'image/jpeg';
+
+        if (data.startsWith('data:')) {
+          const match = data.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = match[1];
+            base64Content = match[2];
+            ext = mimeType.split('/')[1] || 'jpg';
+          }
+        }
+
+        const buffer = Buffer.from(base64Content, 'base64');
+        const cleanName = (filename || 'upload').replace(/[^a-zA-Z0-9._-]/g, '');
+        const blobPath = `uploads/${Date.now()}-${cleanName}.${ext}`;
+
+        const blob = await put(blobPath, buffer, {
+          access: 'public',
+          contentType: mimeType,
+        });
+
+        console.log(`[Vercel Blob] Sucesso! URL pública gerada: ${blob.url}`);
+        return res.json({
+          success: true,
+          url: blob.url,
+          provider: 'vercel_blob',
+          size: buffer.length,
+        });
+      } catch (blobErr: any) {
+        console.error('[Vercel Blob] Erro no upload:', blobErr);
+        return res.status(500).json({
+          error: `Erro no upload para o Vercel Blob: ${blobErr?.message || 'Falha no envio'}`
+        });
+      }
+    }
+
+    // 3. Fallback seguro para desenvolvimento local (quando sem chaves de nuvem)
     let base64Content = data;
     let ext = 'jpg';
 
@@ -515,11 +679,16 @@ app.post('/api/upload', (req: Request, res: Response) => {
 
     fs.writeFileSync(filePath, buffer);
     const publicUrl = `/uploads/${uniqueName}`;
-    console.log(`[Upload] Salvo: ${publicUrl} (${buffer.length} bytes)`);
+    console.log(`[Upload Local] Mídia salva em ${publicUrl} (${buffer.length} bytes). Configure CLOUDINARY_URL para nuvem na Vercel.`);
 
-    return res.json({ success: true, url: publicUrl, size: buffer.length });
+    return res.json({
+      success: true,
+      url: publicUrl,
+      provider: 'local_disk',
+      size: buffer.length
+    });
   } catch (err: any) {
-    console.error('[Upload] Erro ao processar:', err);
+    console.error('[Upload] Erro geral:', err);
     return res.status(500).json({ error: err?.message || 'Falha ao salvar arquivo' });
   }
 });
@@ -603,19 +772,22 @@ app.put('/api/clients/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const data = req.body;
+    let savedClient: any = null;
     if (sql) {
       const existing = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
       if (existing.length === 0) {
-        // Se ainda não existe, cria com o ID especificado
-        await upsertClientToDb({ ...data, id });
+        savedClient = { ...data, id };
+        await upsertClientToDb(savedClient);
       } else {
-        const merged = { ...dbRowToClient(existing[0]), ...data, id };
-        await upsertClientToDb(merged);
+        savedClient = { ...dbRowToClient(existing[0]), ...data, id };
+        await upsertClientToDb(savedClient);
       }
       console.log(`[Neon] Cliente ${id} atualizado com sucesso no banco.`);
+    } else {
+      savedClient = { ...data, id };
     }
-    syncToLocalDisk({ client: { ...data, id } });
-    return res.json({ success: true, id });
+    syncToLocalDisk({ client: savedClient });
+    return res.json({ success: true, client: savedClient });
   } catch (err: any) {
     console.error(`[Neon] Erro ao atualizar cliente ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao atualizar cliente' });
@@ -711,23 +883,28 @@ app.post('/api/biosites', async (req: Request, res: Response) => {
   }
 });
 
-// 4. Atualizar biosite
+// 4. Atualizar biosite (Recebe textos, links, configurações e catálogos)
 app.put('/api/biosites/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const data = req.body;
+    let savedSite: any = null;
     if (sql) {
       const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
       if (existing.length === 0) {
-        await upsertBiositeToDb({ ...data, id });
+        savedSite = { ...data, id, updatedAt: new Date().toISOString() };
+        await upsertBiositeToDb(savedSite);
       } else {
-        const merged = { ...dbRowToBiosite(existing[0]), ...data, id };
-        await upsertBiositeToDb(merged);
+        const current = dbRowToBiosite(existing[0]);
+        savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
+        await upsertBiositeToDb(savedSite);
       }
-      console.log(`[Neon] Bio Site ${id} atualizado no banco.`);
+      console.log(`[Neon] Bio Site ${id} atualizado com sucesso no PostgreSQL.`);
+    } else {
+      savedSite = { ...data, id, updatedAt: new Date().toISOString() };
     }
-    syncToLocalDisk({ biosite: { ...data, id } });
-    return res.json({ success: true, id });
+    syncToLocalDisk({ biosite: savedSite });
+    return res.json({ success: true, biosite: savedSite });
   } catch (err: any) {
     console.error(`[Neon] Erro ao atualizar biosite ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao atualizar biosite' });
@@ -1034,7 +1211,7 @@ app.post('/api/init-db', async (req: Request, res: Response) => {
 });
 
 // -----------------------------------------------------------------------------
-// Health Check com Status da Conexão ao Neon
+// Health Check com Status da Conexão ao Neon e Provedor de Mídia
 // -----------------------------------------------------------------------------
 app.get('/api/health', async (req: Request, res: Response) => {
   let dbStatus = 'disconnected';
@@ -1049,9 +1226,12 @@ app.get('/api/health', async (req: Request, res: Response) => {
     }
   }
 
+  const mediaProvider = hasCloudinary ? 'cloudinary' : (hasVercelBlob ? 'vercel_blob' : 'local_disk');
+
   res.json({
     status: 'ok',
     neonDatabase: dbStatus,
+    mediaStorage: mediaProvider,
     timestamp: new Date().toISOString(),
   });
 });
