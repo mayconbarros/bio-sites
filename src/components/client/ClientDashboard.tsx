@@ -368,16 +368,22 @@ export const ClientDashboard: React.FC = () => {
         buttonAlign: 'left',
       };
 
-      setCatalogsList(prev => prev.map(c => {
-        if (c.id !== catId) return c;
-        const currentItems = c.items || [];
-        const updatedItems = [...currentItems, newItem];
-        return {
-          ...c,
-          items: updatedItems,
-          itemCount: updatedItems.length,
-        };
-      }));
+      setCatalogsList(prev => {
+        const updated = prev.map(c => {
+          if (c.id !== catId) return c;
+          const currentItems = c.items || [];
+          const updatedItems = [...currentItems, newItem];
+          return {
+            ...c,
+            items: updatedItems,
+            itemCount: updatedItems.length,
+          };
+        });
+        if (activeBiosite) {
+          updateBiosite(activeBiosite.id, { catalogs: updated });
+        }
+        return updated;
+      });
 
       setFloatingToast(isVideo ? 'Vídeo adicionado' : type === 'tour' ? 'Tour 360º adicionado' : 'Imagem adicionada');
       setTimeout(() => {
@@ -385,15 +391,15 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    showToast('Enviando mídia para a nuvem...');
+    showToast('Enviando mídia diretamente para o Cloudinary...');
     uploadMediaFile(file)
       .then(uploadedUrl => {
         commitItem(uploadedUrl);
-        showToast(isVideo ? 'Vídeo enviado com sucesso para a nuvem!' : 'Imagem enviada com sucesso para a nuvem!', 'success');
+        showToast(isVideo ? 'Vídeo enviado com sucesso para o Cloudinary!' : 'Imagem enviada com sucesso para o Cloudinary!', 'success');
       })
       .catch((err: any) => {
         console.error('[Upload Catálogo] Erro:', err);
-        showToast(`Erro ao enviar mídia: ${err?.message || 'Falha no upload'}`, 'error');
+        showToast(`Erro ao enviar mídia para o Cloudinary: ${err?.message || 'Falha no upload'}`, 'error');
       });
   };
 
@@ -402,10 +408,30 @@ export const ClientDashboard: React.FC = () => {
     const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
 
     const commitReplace = (fileUrl: string) => {
+      const itemType: 'image' | 'video' = isVideo ? 'video' : 'image';
       handleUpdateCatalogItem(catId, itemId, { 
         imageUrl: fileUrl,
         mediaType,
-        type: isVideo ? 'video' : 'image'
+        type: itemType
+      });
+      setCatalogsList(prev => {
+        const updated: CatalogSection[] = prev.map(c => {
+          if (c.id !== catId) return c;
+          const updatedItems: CatalogItem[] = (c.items || []).map(item => item.id === itemId ? {
+            ...item,
+            imageUrl: fileUrl,
+            mediaType,
+            type: itemType
+          } : item);
+          return {
+            ...c,
+            items: updatedItems
+          };
+        });
+        if (activeBiosite) {
+          updateBiosite(activeBiosite.id, { catalogs: updated });
+        }
+        return updated;
       });
       setFloatingToast(isVideo ? 'Vídeo atualizado' : 'Imagem atualizada');
       setTimeout(() => {
@@ -413,7 +439,7 @@ export const ClientDashboard: React.FC = () => {
       }, 3500);
     };
 
-    showToast('Enviando nova mídia para a nuvem...');
+    showToast('Enviando nova mídia diretamente para o Cloudinary...');
     uploadMediaFile(file)
       .then(uploadedUrl => {
         commitReplace(uploadedUrl);

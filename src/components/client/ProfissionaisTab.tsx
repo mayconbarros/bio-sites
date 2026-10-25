@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Professional, Service, ProfessionalDaySchedule } from '../../types';
 import { CustomToggle } from '../common/CustomToggle';
+import { uploadMediaFile } from '../../utils/uploadMedia';
 import { 
   Plus, 
   ChevronDown, 
@@ -30,7 +31,8 @@ export const ProfissionaisTab: React.FC = () => {
     professionals, 
     addProfessional, 
     updateProfessional, 
-    deleteProfessional 
+    deleteProfessional,
+    showToast 
   } = useApp();
 
   const [newProfName, setNewProfName] = useState('');
@@ -162,17 +164,20 @@ export const ProfissionaisTab: React.FC = () => {
   };
 
   // Photo upload handler
-  const handlePhotoUpload = (profId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (profId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        updateProfessional(profId, { photoUrl: reader.result });
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      showToast('Enviando foto diretamente para o Cloudinary...');
+      const secureUrl = await uploadMediaFile(file);
+      updateProfessional(profId, { photoUrl: secureUrl });
+      showToast('Foto do profissional atualizada com sucesso!', 'success');
+    } catch (err: any) {
+      console.error('Erro no upload da foto do profissional:', err);
+      showToast(`Erro ao enviar foto: ${err?.message || 'Falha no upload'}`, 'error');
+    }
+    e.target.value = '';
   };
 
   // Color picker handler

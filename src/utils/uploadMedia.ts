@@ -1,51 +1,54 @@
 /**
- * Client-side file uploader.
- * Envia arquivos para o endpoint /api/upload no backend, que realiza o upload
- * direto para a nuvem (Cloudinary ou Vercel Blob) e retorna uma URL pública definitiva (https://...).
+ * Upload direto para a API do Cloudinary a partir do navegador (Client-side Direct Upload).
  * 
- * Regra de Ouro: NUNCA retorna ou salva dados em Base64 bruto no PostgreSQL / Neon,
- * prevenindo estouro de banco ou lentidão no carregamento.
+ * Ignora o servidor Node.js/server.ts para evitar estouros de payload (413 Payload Too Large)
+ * ou limites de timeout (504 Gateway Timeout) na Vercel e plataformas serverless ao subir vídeos e imagens pesadas.
+ * 
+ * Regra:
+ * 1. O arquivo binário é enviado diretamente para o Cloudinary via FormData com upload_preset não assinado ('meus_videos').
+ * 2. O Cloudinary processa na CDN e devolve o campo `secure_url`.
+ * 3. O frontend recebe a URL final HTTPS definitiva e envia apenas essa string de texto ao backend/Neon.
  */
+
+const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/je065pkr/auto/upload';
+const UPLOAD_PRESET = 'meus_videos';
+
 export async function uploadMediaFile(file: File | Blob, originalFilename?: string): Promise<string> {
-  const name = originalFilename || (file instanceof File ? file.name : 'upload.jpg');
+  const filename = originalFilename || (file instanceof File ? file.name : 'upload.jpg');
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64Data = reader.result as string;
+  try {
+    console.log(`[Cloudinary Direct] Iniciando upload direto de "${filename}" (${file.size} bytes)...`);
 
-        // Envia para o backend para envio ao Cloudinary / Vercel Blob
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: name,
-            data: base64Data,
-          }),
-        });
+    // 1. Cria o FormData com o arquivo e o preset unsigned configurado no Cloudinary
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          const errMsg = errData?.error || `Erro HTTP ${res.status} no upload da imagem`;
-          console.error('[uploadMediaFile] Falha no upload:', errMsg);
-          return reject(new Error(errMsg));
-        }
+    // 2. Envia diretamente para a API do Cloudinary via POST
+    const response = await fetch(CLOUDINARY_URL, {
+      method: 'POST',
+      body: formData,
+    });
 
-        const json = await res.json();
-        if (json.url && typeof json.url === 'string') {
-          console.log('[uploadMediaFile] Arquivo salvo na nuvem com URL pública:', json.url, `(Provedor: ${json.provider || 'cloud'})`);
-          return resolve(json.url);
-        }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMessage = errorData?.error?.message || `Erro HTTP ${response.status} ao enviar para o Cloudinary`;
+      console.error('[Cloudinary Direct] Falha na resposta:', errorMessage, errorData);
+      throw new Error(errorMessage);
+    }
 
-        reject(new Error('Servidor não retornou uma URL válida para a mídia.'));
-      } catch (err: any) {
-        console.error('[uploadMediaFile] Erro de rede ou processamento no upload:', err);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    };
+    // 3. Obtém a resposta JSON com a secure_url
+    const data = await response.json();
 
-    reader.onerror = (err) => reject(new Error('Erro ao ler o arquivo no navegador.'));
-    reader.readAsDataURL(file);
-  });
+    if (!data.secure_url) {
+      console.error('[Cloudinary Direct] Resposta sem secure_url:', data);
+      throw new Error('O Cloudinary não retornou uma URL segura (secure_url).');
+    }
+
+    console.log('[Cloudinary Direct] Sucesso! URL pública gerada:', data.secure_url);
+    return data.secure_url;
+  } catch (error: any) {
+    console.error('[Cloudinary Direct] Erro no upload direto:', error);
+    throw error instanceof Error ? error : new Error(String(error));
+  }
 }

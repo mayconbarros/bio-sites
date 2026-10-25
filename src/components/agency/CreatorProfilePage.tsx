@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Upload, Check, SquareUser } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { uploadMediaFile } from '../../utils/uploadMedia';
 
 export const CreatorProfilePage: React.FC = () => {
   const { creatorProfile, updateCreatorProfile, showToast } = useApp();
@@ -13,7 +14,7 @@ export const CreatorProfilePage: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -22,14 +23,15 @@ export const CreatorProfilePage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setPhotoUrl(reader.result);
-        showToast('Foto selecionada com sucesso!', 'success');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      showToast('Enviando foto diretamente para o Cloudinary...');
+      const secureUrl = await uploadMediaFile(file);
+      setPhotoUrl(secureUrl);
+      showToast('Foto enviada com sucesso para o Cloudinary!', 'success');
+    } catch (err: any) {
+      console.error('Erro no upload da foto do criador:', err);
+      showToast(`Erro ao enviar foto: ${err?.message || 'Falha no upload'}`, 'error');
+    }
     e.target.value = '';
   };
 

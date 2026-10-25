@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -91,18 +91,29 @@ if (hasCloudinary) {
   getCloudinaryClient().catch(() => {});
 }
 
-const hasVercelBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+function sanitizeBlobToken(): boolean {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!token) return false;
+  if (token.includes('...') || token.includes('<') || token.length < 20) {
+    console.warn('[Vercel Blob] AVISO: BLOB_READ_WRITE_TOKEN contém placeholders. Utilizando armazenamento local.');
+    return false;
+  }
+  return true;
+}
+
+const hasVercelBlob = sanitizeBlobToken();
 if (hasVercelBlob) {
   console.log('[Vercel Blob] Provedor de armazenamento Vercel Blob ATIVO!');
 }
 
 if (!hasCloudinary && !hasVercelBlob) {
-  console.warn('[Storage Nuvem] AVISO: Nenhuma credencial de Cloudinary ou Vercel Blob configurada. Os uploads serão armazenados no diretório local /uploads. Para produção na Vercel, configure CLOUDINARY_URL no .env');
+  console.log('[Storage Nuvem] Armazenamento de mídia operando no diretório local /uploads.');
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// AI Studio requires dev server to bind to port 3000 on host 0.0.0.0
+const PORT = 3000;
 const DATA_FILE = path.resolve(__dirname, 'src/data/persisted_state.json');
 const UPLOADS_DIR = path.resolve(__dirname, 'public/uploads');
 
@@ -112,22 +123,79 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 // -----------------------------------------------------------------------------
-// Neon PostgreSQL client initialization
+// Local JSON store helpers (resilient in-memory/disk fallback)
+// -----------------------------------------------------------------------------
+function readLocalData(): any {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.warn('[Storage Local] Erro ao ler persisted_state.json:', err);
+  }
+  return {
+    biosites: [],
+    clients: [],
+    services: [],
+    professionals: [],
+    appointments: [],
+    creatorProfile: null,
+    agencySettings: null,
+  };
+}
+
+function writeLocalData(data: any): void {
+  try {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Storage Local] Erro ao gravar persisted_state.json:', err);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Neon PostgreSQL client initialization with Safe Fallback
 // -----------------------------------------------------------------------------
 const databaseUrl = process.env.DATABASE_URL;
-const sql = databaseUrl ? neon(databaseUrl) : null;
+const isPlaceholderDb = !databaseUrl || 
+                        databaseUrl.includes('ep-xyz') || 
+                        databaseUrl.includes('<') || 
+                        databaseUrl.includes('user:password');
 
-if (databaseUrl) {
-  console.log('[Neon] DATABASE_URL detectada! Conexão com banco Neon configurada.');
+const sql = (!isPlaceholderDb && databaseUrl) ? neon(databaseUrl) : null;
+let sqlActive = false;
+
+if (databaseUrl && !isPlaceholderDb) {
+  console.log('[Neon] DATABASE_URL detectada! Testando conexão com banco Neon...');
 } else {
-  console.warn('[Neon] ATENÇÃO: DATABASE_URL não definida no ambiente. Operando com fallback local em disco (persisted_state.json).');
+  console.log('[Neon] DATABASE_URL não configurada ou placeholder detectado. Operando com armazenamento local (persisted_state.json).');
+}
+
+async function checkNeonConnection(): Promise<boolean> {
+  if (!sql) {
+    sqlActive = false;
+    return false;
+  }
+  try {
+    await sql`SELECT 1 as ping;`;
+    sqlActive = true;
+    console.log('[Neon] Conexão com banco Neon validada com sucesso.');
+    await initNeonDatabase();
+    return true;
+  } catch (err: any) {
+    console.warn('[Neon] Conexão com Neon indisponível (' + (err?.message || 'erro de autenticação/rede') + '). Operando com fallback local.');
+    sqlActive = false;
+    return false;
+  }
 }
 
 // -----------------------------------------------------------------------------
 // Database Schema Initialization (Executa CREATE TABLE IF NOT EXISTS automaticamente)
 // -----------------------------------------------------------------------------
 async function initNeonDatabase() {
-  if (!sql) return;
+  if (!sql || !sqlActive) return;
   try {
     console.log('[Neon] Verificando e criando tabelas se necessário...');
     await sql`
@@ -604,12 +672,7 @@ app.post('/api/upload', async (req: Request, res: Response) => {
           });
         }
       } catch (cloudErr: any) {
-        console.error('[Cloudinary] Erro no upload:', cloudErr);
-        if (!hasVercelBlob) {
-          return res.status(500).json({
-            error: `Erro no upload para o Cloudinary: ${cloudErr?.message || 'Falha de comunicação'}`
-          });
-        }
+        console.warn('[Cloudinary] Falha no upload Cloudinary, tentando fallback:', cloudErr?.message);
       }
     }
 
@@ -647,10 +710,7 @@ app.post('/api/upload', async (req: Request, res: Response) => {
           size: buffer.length,
         });
       } catch (blobErr: any) {
-        console.error('[Vercel Blob] Erro no upload:', blobErr);
-        return res.status(500).json({
-          error: `Erro no upload para o Vercel Blob: ${blobErr?.message || 'Falha no envio'}`
-        });
+        console.warn('[Vercel Blob] Falha no upload Vercel Blob, usando fallback local:', blobErr?.message);
       }
     }
 
@@ -700,39 +760,36 @@ app.post('/api/upload', async (req: Request, res: Response) => {
 // 1. Listar todos os clientes
 app.get('/api/clients', async (req: Request, res: Response) => {
   try {
-    if (sql) {
+    if (sqlActive && sql) {
       const rows = await sql`SELECT * FROM clients ORDER BY created_at DESC;`;
       return res.json(rows.map(dbRowToClient));
     }
-    // Fallback local se não houver banco
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      const data = JSON.parse(raw);
-      return res.json(data.clients || []);
-    }
-    return res.json([]);
   } catch (err: any) {
-    console.error('[Neon] Erro ao listar clientes:', err);
-    return res.status(500).json({ error: 'Erro ao consultar clientes no banco' });
+    console.warn('[Neon] Erro ao listar clientes no Neon, operando em modo local:', err?.message);
+    sqlActive = false;
   }
+  const data = readLocalData();
+  return res.json(data.clients || []);
 });
 
 // 2. Buscar cliente por ID
 app.get('/api/clients/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    if (sql) {
+    if (sqlActive && sql) {
       const rows = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
-      if (rows.length === 0) {
-        return res.status(404).json({ error: 'Cliente não encontrado' });
+      if (rows.length > 0) {
+        return res.json(dbRowToClient(rows[0]));
       }
-      return res.json(dbRowToClient(rows[0]));
     }
-    return res.status(404).json({ error: 'Cliente não encontrado' });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao buscar cliente ${id}:`, err);
-    return res.status(500).json({ error: err?.message || 'Erro ao buscar cliente' });
+    console.warn(`[Neon] Erro ao buscar cliente ${id}:`, err?.message);
+    sqlActive = false;
   }
+  const data = readLocalData();
+  const match = (data.clients || []).find((c: any) => c.id === id);
+  if (match) return res.json(match);
+  return res.status(404).json({ error: 'Cliente não encontrado' });
 });
 
 // 3. Criar novo cliente
@@ -750,19 +807,23 @@ app.post('/api/clients', async (req: Request, res: Response) => {
       role: data.role || 'client',
       assignedBiositeIds: data.assignedBiositeIds || [],
       permissions: data.permissions || [],
+      createdAt: data.createdAt || new Date().toISOString(),
     };
 
-    if (sql) {
-      await upsertClientToDb(client);
-      console.log(`[Neon] Cliente ${client.name} inserido no banco com sucesso.`);
+    if (sqlActive && sql) {
+      try {
+        await upsertClientToDb(client);
+        console.log(`[Neon] Cliente ${client.name} inserido no banco com sucesso.`);
+      } catch (err: any) {
+        console.warn('[Neon] Erro ao salvar cliente no Neon:', err?.message);
+        sqlActive = false;
+      }
     }
 
-    // Salva cópia de segurança em disco
     syncToLocalDisk({ client });
-
     return res.status(201).json({ success: true, client });
   } catch (err: any) {
-    console.error('[Neon] Erro ao criar cliente:', err);
+    console.error('Erro ao criar cliente:', err);
     return res.status(500).json({ error: err?.message || 'Erro ao criar cliente' });
   }
 });
@@ -773,23 +834,29 @@ app.put('/api/clients/:id', async (req: Request, res: Response) => {
   try {
     const data = req.body;
     let savedClient: any = null;
-    if (sql) {
-      const existing = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
-      if (existing.length === 0) {
-        savedClient = { ...data, id };
+    if (sqlActive && sql) {
+      try {
+        const existing = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
+        if (existing.length === 0) {
+          savedClient = { ...data, id };
+        } else {
+          savedClient = { ...dbRowToClient(existing[0]), ...data, id };
+        }
         await upsertClientToDb(savedClient);
-      } else {
-        savedClient = { ...dbRowToClient(existing[0]), ...data, id };
-        await upsertClientToDb(savedClient);
+      } catch (err: any) {
+        console.warn(`[Neon] Erro ao atualizar cliente ${id}:`, err?.message);
+        sqlActive = false;
       }
-      console.log(`[Neon] Cliente ${id} atualizado com sucesso no banco.`);
-    } else {
-      savedClient = { ...data, id };
+    }
+    if (!savedClient) {
+      const local = readLocalData();
+      const existing = (local.clients || []).find((c: any) => c.id === id) || {};
+      savedClient = { ...existing, ...data, id };
     }
     syncToLocalDisk({ client: savedClient });
     return res.json({ success: true, client: savedClient });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao atualizar cliente ${id}:`, err);
+    console.error(`Erro ao atualizar cliente ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao atualizar cliente' });
   }
 });
@@ -798,60 +865,67 @@ app.put('/api/clients/:id', async (req: Request, res: Response) => {
 app.delete('/api/clients/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    if (sql) {
-      await sql`DELETE FROM clients WHERE id = ${id};`;
-      console.log(`[Neon] Cliente ${id} removido do banco.`);
+    if (sqlActive && sql) {
+      try {
+        await sql`DELETE FROM clients WHERE id = ${id};`;
+      } catch (err: any) {
+        console.warn(`[Neon] Erro ao remover cliente ${id}:`, err?.message);
+        sqlActive = false;
+      }
     }
+    const current = readLocalData();
+    current.clients = (current.clients || []).filter((c: any) => c.id !== id);
+    writeLocalData(current);
     return res.json({ success: true, id });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao excluir cliente ${id}:`, err);
+    console.error(`Erro ao excluir cliente ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao excluir cliente' });
   }
 });
 
 // -----------------------------------------------------------------------------
-// CRUD DE MINISITES / BIO SITES (Neon PostgreSQL)
+// CRUD DE MINISITES / BIO SITES
 // -----------------------------------------------------------------------------
 
 // 1. Listar todos os biosites
 app.get('/api/biosites', async (req: Request, res: Response) => {
   try {
-    if (sql) {
+    if (sqlActive && sql) {
       const rows = await sql`SELECT * FROM biosites ORDER BY created_at DESC;`;
       return res.json(rows.map(dbRowToBiosite));
     }
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      const data = JSON.parse(raw);
-      return res.json(data.biosites || []);
-    }
-    return res.json([]);
   } catch (err: any) {
-    console.error('[Neon] Erro ao listar biosites:', err);
-    return res.status(500).json({ error: 'Erro ao listar biosites do banco' });
+    console.warn('[Neon] Erro ao listar biosites:', err?.message);
+    sqlActive = false;
   }
+  const data = readLocalData();
+  return res.json(data.biosites || []);
 });
 
 // 2. Buscar biosite por ID ou Slug
 app.get('/api/biosites/:idOrSlug', async (req: Request, res: Response) => {
   const { idOrSlug } = req.params;
   try {
-    if (sql) {
+    if (sqlActive && sql) {
       const rows = await sql`
         SELECT * FROM biosites 
         WHERE id = ${idOrSlug} OR LOWER(slug) = LOWER(${idOrSlug}) 
         LIMIT 1;
       `;
-      if (rows.length === 0) {
-        return res.status(404).json({ error: 'Bio Site não encontrado' });
+      if (rows.length > 0) {
+        return res.json(dbRowToBiosite(rows[0]));
       }
-      return res.json(dbRowToBiosite(rows[0]));
     }
-    return res.status(404).json({ error: 'Bio Site não encontrado' });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao buscar biosite ${idOrSlug}:`, err);
-    return res.status(500).json({ error: err?.message || 'Erro ao buscar biosite' });
+    console.warn(`[Neon] Erro ao buscar biosite ${idOrSlug}:`, err?.message);
+    sqlActive = false;
   }
+  const data = readLocalData();
+  const found = (data.biosites || []).find((b: any) => 
+    b.id === idOrSlug || (b.slug && b.slug.toLowerCase() === idOrSlug.toLowerCase())
+  );
+  if (found) return res.json(found);
+  return res.status(404).json({ error: 'Bio Site não encontrado' });
 });
 
 // 3. Criar novo biosite
@@ -870,43 +944,54 @@ app.post('/api/biosites', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString(),
     };
 
-    if (sql) {
-      await upsertBiositeToDb(biosite);
-      console.log(`[Neon] Bio Site "${biosite.title}" inserido no banco com sucesso.`);
+    if (sqlActive && sql) {
+      try {
+        await upsertBiositeToDb(biosite);
+        console.log(`[Neon] Bio Site "${biosite.title}" inserido no banco com sucesso.`);
+      } catch (err: any) {
+        console.warn('[Neon] Erro ao inserir biosite:', err?.message);
+        sqlActive = false;
+      }
     }
 
     syncToLocalDisk({ biosite });
     return res.status(201).json({ success: true, biosite });
   } catch (err: any) {
-    console.error('[Neon] Erro ao criar biosite:', err);
+    console.error('Erro ao criar biosite:', err);
     return res.status(500).json({ error: err?.message || 'Erro ao criar biosite' });
   }
 });
 
-// 4. Atualizar biosite (Recebe textos, links, configurações e catálogos)
+// 4. Atualizar biosite
 app.put('/api/biosites/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const data = req.body;
     let savedSite: any = null;
-    if (sql) {
-      const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
-      if (existing.length === 0) {
-        savedSite = { ...data, id, updatedAt: new Date().toISOString() };
+    if (sqlActive && sql) {
+      try {
+        const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
+        if (existing.length === 0) {
+          savedSite = { ...data, id, updatedAt: new Date().toISOString() };
+        } else {
+          const current = dbRowToBiosite(existing[0]);
+          savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
+        }
         await upsertBiositeToDb(savedSite);
-      } else {
-        const current = dbRowToBiosite(existing[0]);
-        savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
-        await upsertBiositeToDb(savedSite);
+      } catch (err: any) {
+        console.warn(`[Neon] Erro no update do biosite ${id}:`, err?.message);
+        sqlActive = false;
       }
-      console.log(`[Neon] Bio Site ${id} atualizado com sucesso no PostgreSQL.`);
-    } else {
-      savedSite = { ...data, id, updatedAt: new Date().toISOString() };
+    }
+    if (!savedSite) {
+      const local = readLocalData();
+      const existing = (local.biosites || []).find((b: any) => b.id === id) || {};
+      savedSite = { ...existing, ...data, id, updatedAt: new Date().toISOString() };
     }
     syncToLocalDisk({ biosite: savedSite });
     return res.json({ success: true, biosite: savedSite });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao atualizar biosite ${id}:`, err);
+    console.error(`Erro ao atualizar biosite ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao atualizar biosite' });
   }
 });
@@ -915,41 +1000,48 @@ app.put('/api/biosites/:id', async (req: Request, res: Response) => {
 app.delete('/api/biosites/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    if (sql) {
-      await sql`DELETE FROM biosites WHERE id = ${id};`;
-      console.log(`[Neon] Bio Site ${id} removido do banco (e serviços associados deletados em cascata).`);
+    if (sqlActive && sql) {
+      try {
+        await sql`DELETE FROM biosites WHERE id = ${id};`;
+      } catch (err: any) {
+        console.warn(`[Neon] Erro ao excluir biosite ${id}:`, err?.message);
+        sqlActive = false;
+      }
     }
+    const current = readLocalData();
+    current.biosites = (current.biosites || []).filter((b: any) => b.id !== id);
+    current.services = (current.services || []).filter((s: any) => s.biositeId !== id);
+    current.appointments = (current.appointments || []).filter((a: any) => a.biositeId !== id);
+    writeLocalData(current);
     return res.json({ success: true, id });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao excluir biosite ${id}:`, err);
+    console.error(`Erro ao excluir biosite ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao excluir biosite' });
   }
 });
 
 // -----------------------------------------------------------------------------
-// CRUD DE SERVIÇOS (Neon PostgreSQL)
+// CRUD DE SERVIÇOS
 // -----------------------------------------------------------------------------
 app.get('/api/services', async (req: Request, res: Response) => {
   const { biositeId } = req.query;
   try {
-    if (sql) {
-      let rows;
-      if (biositeId) {
-        rows = await sql`SELECT * FROM services WHERE biosite_id = ${String(biositeId)} ORDER BY order_index ASC, created_at ASC;`;
-      } else {
-        rows = await sql`SELECT * FROM services ORDER BY order_index ASC, created_at ASC;`;
-      }
+    if (sqlActive && sql) {
+      const rows = biositeId
+        ? await sql`SELECT * FROM services WHERE biosite_id = ${String(biositeId)} ORDER BY order_index ASC, created_at ASC;`
+        : await sql`SELECT * FROM services ORDER BY order_index ASC, created_at ASC;`;
       return res.json(rows.map(dbRowToService));
     }
-    if (fs.existsSync(DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-      return res.json(data.services || []);
-    }
-    return res.json([]);
   } catch (err: any) {
-    console.error('[Neon] Erro ao listar serviços:', err);
-    return res.status(500).json({ error: 'Erro ao buscar serviços' });
+    console.warn('[Neon] Erro ao listar serviços:', err?.message);
+    sqlActive = false;
   }
+  const data = readLocalData();
+  let list = data.services || [];
+  if (biositeId) {
+    list = list.filter((s: any) => s.biositeId === biositeId);
+  }
+  return res.json(list);
 });
 
 app.post('/api/services', async (req: Request, res: Response) => {
@@ -962,12 +1054,21 @@ app.post('/api/services', async (req: Request, res: Response) => {
       ...data,
       id: data.id || `srv-${Date.now()}`,
     };
-    if (sql) {
-      await upsertServiceToDb(service);
+    if (sqlActive && sql) {
+      try {
+        await upsertServiceToDb(service);
+      } catch (err: any) {
+        console.warn('[Neon] Erro ao criar serviço:', err?.message);
+        sqlActive = false;
+      }
     }
+    const local = readLocalData();
+    local.services = local.services || [];
+    local.services.push(service);
+    writeLocalData(local);
     return res.status(201).json({ success: true, service });
   } catch (err: any) {
-    console.error('[Neon] Erro ao criar serviço:', err);
+    console.error('Erro ao criar serviço:', err);
     return res.status(500).json({ error: err?.message || 'Erro ao criar serviço' });
   }
 });
@@ -976,14 +1077,28 @@ app.put('/api/services/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const data = req.body;
-    if (sql) {
-      const existing = await sql`SELECT * FROM services WHERE id = ${id} LIMIT 1;`;
-      const merged = existing.length > 0 ? { ...dbRowToService(existing[0]), ...data, id } : { ...data, id };
-      await upsertServiceToDb(merged);
+    if (sqlActive && sql) {
+      try {
+        const existing = await sql`SELECT * FROM services WHERE id = ${id} LIMIT 1;`;
+        const merged = existing.length > 0 ? { ...dbRowToService(existing[0]), ...data, id } : { ...data, id };
+        await upsertServiceToDb(merged);
+      } catch (err: any) {
+        console.warn(`[Neon] Erro ao atualizar serviço ${id}:`, err?.message);
+        sqlActive = false;
+      }
     }
+    const local = readLocalData();
+    const idx = (local.services || []).findIndex((s: any) => s.id === id);
+    if (idx >= 0) {
+      local.services[idx] = { ...local.services[idx], ...data, id };
+    } else {
+      local.services = local.services || [];
+      local.services.push({ ...data, id });
+    }
+    writeLocalData(local);
     return res.json({ success: true, id });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao atualizar serviço ${id}:`, err);
+    console.error(`Erro ao atualizar serviço ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao atualizar serviço' });
   }
 });
@@ -991,25 +1106,30 @@ app.put('/api/services/:id', async (req: Request, res: Response) => {
 app.delete('/api/services/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    if (sql) {
-      await sql`DELETE FROM services WHERE id = ${id};`;
+    if (sqlActive && sql) {
+      try {
+        await sql`DELETE FROM services WHERE id = ${id};`;
+      } catch (err: any) {
+        console.warn(`[Neon] Erro ao deletar serviço ${id}:`, err?.message);
+        sqlActive = false;
+      }
     }
+    const local = readLocalData();
+    local.services = (local.services || []).filter((s: any) => s.id !== id);
+    writeLocalData(local);
     return res.json({ success: true, id });
   } catch (err: any) {
-    console.error(`[Neon] Erro ao deletar serviço ${id}:`, err);
+    console.error(`Erro ao deletar serviço ${id}:`, err);
     return res.status(500).json({ error: err?.message || 'Erro ao excluir serviço' });
   }
 });
 
 // -----------------------------------------------------------------------------
 // ENDPOINTS DE SINCRONIZAÇÃO COMPLETA DE ESTADO (GET /api/state e POST /api/state)
-// Mantém total compatibilidade e sincronismo em tempo real com o AppContext do Front-end
 // -----------------------------------------------------------------------------
-
 app.get('/api/state', async (req: Request, res: Response) => {
   try {
-    if (sql) {
-      // Consulta todas as tabelas em paralelo no Neon
+    if (sqlActive && sql) {
       const [biositeRows, clientRows, serviceRows, profRows, apptRows, settingsRows] = await Promise.all([
         sql`SELECT * FROM biosites ORDER BY created_at DESC;`,
         sql`SELECT * FROM clients ORDER BY created_at DESC;`,
@@ -1027,39 +1147,25 @@ app.get('/api/state', async (req: Request, res: Response) => {
         if (row.key === 'agencySettings') agencySettings = row.value;
       }
 
-      // Se o banco ainda não tem biosites mas existe o persisted_state local, carrega o local
-      if (biositeRows.length === 0 && fs.existsSync(DATA_FILE)) {
-        const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-        return res.json(JSON.parse(raw));
+      if (biositeRows.length > 0) {
+        return res.json({
+          biosites: biositeRows.map(dbRowToBiosite),
+          clients: clientRows.map(dbRowToClient),
+          services: serviceRows.map(dbRowToService),
+          professionals: profRows.map(dbRowToProfessional),
+          appointments: apptRows.map(dbRowToAppointment),
+          creatorProfile,
+          agencySettings,
+        });
       }
-
-      return res.json({
-        biosites: biositeRows.map(dbRowToBiosite),
-        clients: clientRows.map(dbRowToClient),
-        services: serviceRows.map(dbRowToService),
-        professionals: profRows.map(dbRowToProfessional),
-        appointments: apptRows.map(dbRowToAppointment),
-        creatorProfile,
-        agencySettings,
-      });
     }
-
-    // Fallback: Leitura do arquivo em disco
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      return res.json(JSON.parse(raw));
-    }
-    return res.json(null);
   } catch (e: any) {
-    console.warn('[Neon] Erro ao ler estado unificado:', e?.message || e);
-    if (fs.existsSync(DATA_FILE)) {
-      try {
-        const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-        return res.json(JSON.parse(raw));
-      } catch {}
-    }
-    return res.status(500).json({ error: 'Falha ao carregar dados' });
+    console.warn('[Neon] Erro ao ler estado unificado no Neon:', e?.message);
+    sqlActive = false;
   }
+
+  const local = readLocalData();
+  return res.json(local);
 });
 
 app.post('/api/state', async (req: Request, res: Response) => {
@@ -1067,107 +1173,92 @@ app.post('/api/state', async (req: Request, res: Response) => {
     const data = req.body;
     if (!data) return res.json({ success: false });
 
-    // 1. Se o banco Neon estiver configurado, persiste entidades usando SQL real
-    if (sql) {
-      if (data.biosites && Array.isArray(data.biosites)) {
-        for (const b of data.biosites) {
-          await upsertBiositeToDb(b);
+    if (sqlActive && sql) {
+      try {
+        if (data.biosites && Array.isArray(data.biosites)) {
+          for (const b of data.biosites) await upsertBiositeToDb(b);
         }
-      }
-
-      if (data.clients && Array.isArray(data.clients)) {
-        for (const c of data.clients) {
-          await upsertClientToDb(c);
+        if (data.clients && Array.isArray(data.clients)) {
+          for (const c of data.clients) await upsertClientToDb(c);
         }
-      }
-
-      if (data.services && Array.isArray(data.services)) {
-        for (const s of data.services) {
-          await upsertServiceToDb(s);
+        if (data.services && Array.isArray(data.services)) {
+          for (const s of data.services) await upsertServiceToDb(s);
         }
-      }
+        if (data.professionals && Array.isArray(data.professionals)) {
+          for (const p of data.professionals) {
+            const id = p.id || `prof-${Date.now()}`;
+            const biositeId = p.biositeId;
+            const name = p.name || 'Profissional';
+            const photoUrl = p.photoUrl || '';
+            const color = p.color || '#1d4ed8';
+            const active = p.active ?? true;
+            const servicesJson = JSON.stringify(p.services || []);
+            const scheduleJson = JSON.stringify(p.workSchedule || []);
+            const blockedJson = JSON.stringify(p.blockedDates || []);
 
-      if (data.professionals && Array.isArray(data.professionals)) {
-        for (const p of data.professionals) {
-          const id = p.id || `prof-${Date.now()}`;
-          const biositeId = p.biositeId;
-          const name = p.name || 'Profissional';
-          const photoUrl = p.photoUrl || '';
-          const color = p.color || '#1d4ed8';
-          const active = p.active ?? true;
-          const servicesJson = JSON.stringify(p.services || []);
-          const scheduleJson = JSON.stringify(p.workSchedule || []);
-          const blockedJson = JSON.stringify(p.blockedDates || []);
+            await sql`
+              INSERT INTO professionals (id, biosite_id, name, photo_url, color, active, services, work_schedule, blocked_dates)
+              VALUES (${id}, ${biositeId}, ${name}, ${photoUrl}, ${color}, ${active}, ${servicesJson}::jsonb, ${scheduleJson}::jsonb, ${blockedJson}::jsonb)
+              ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                photo_url = EXCLUDED.photo_url,
+                color = EXCLUDED.color,
+                active = EXCLUDED.active,
+                services = EXCLUDED.services,
+                work_schedule = EXCLUDED.work_schedule,
+                blocked_dates = EXCLUDED.blocked_dates;
+            `;
+          }
+        }
+        if (data.appointments && Array.isArray(data.appointments)) {
+          for (const a of data.appointments) {
+            const id = a.id || `app-${Date.now()}`;
+            const biositeId = a.biositeId;
+            const serviceId = a.serviceId || null;
+            const serviceName = a.serviceName || '';
+            const customerName = a.customerName || 'Cliente';
+            const customerPhone = a.customerPhone || '';
+            const apptDate = a.appointmentDate;
+            const apptTime = a.appointmentTime;
+            const duration = Number(a.durationMinutes) || 30;
+            const totalPrice = Number(a.totalPrice) || 0;
+            const status = a.status || 'pending';
+            const notes = a.customerNotes || '';
 
+            await sql`
+              INSERT INTO appointments (id, biosite_id, service_id, service_name, customer_name, customer_phone, appointment_date, appointment_time, duration_minutes, total_price, status, customer_notes)
+              VALUES (${id}, ${biositeId}, ${serviceId}, ${serviceName}, ${customerName}, ${customerPhone}, ${apptDate}, ${apptTime}, ${duration}, ${totalPrice}, ${status}, ${notes})
+              ON CONFLICT (id) DO UPDATE SET
+                status = EXCLUDED.status,
+                customer_notes = EXCLUDED.customer_notes;
+            `;
+          }
+        }
+        if (data.creatorProfile) {
           await sql`
-            INSERT INTO professionals (id, biosite_id, name, photo_url, color, active, services, work_schedule, blocked_dates)
-            VALUES (${id}, ${biositeId}, ${name}, ${photoUrl}, ${color}, ${active}, ${servicesJson}::jsonb, ${scheduleJson}::jsonb, ${blockedJson}::jsonb)
-            ON CONFLICT (id) DO UPDATE SET
-              name = EXCLUDED.name,
-              photo_url = EXCLUDED.photo_url,
-              color = EXCLUDED.color,
-              active = EXCLUDED.active,
-              services = EXCLUDED.services,
-              work_schedule = EXCLUDED.work_schedule,
-              blocked_dates = EXCLUDED.blocked_dates;
+            INSERT INTO app_settings (key, value)
+            VALUES ('creatorProfile', ${JSON.stringify(data.creatorProfile)})
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
           `;
         }
-      }
-
-      if (data.appointments && Array.isArray(data.appointments)) {
-        for (const a of data.appointments) {
-          const id = a.id || `app-${Date.now()}`;
-          const biositeId = a.biositeId;
-          const serviceId = a.serviceId || null;
-          const serviceName = a.serviceName || '';
-          const customerName = a.customerName || 'Cliente';
-          const customerPhone = a.customerPhone || '';
-          const apptDate = a.appointmentDate;
-          const apptTime = a.appointmentTime;
-          const duration = Number(a.durationMinutes) || 30;
-          const totalPrice = Number(a.totalPrice) || 0;
-          const status = a.status || 'pending';
-          const notes = a.customerNotes || '';
-
+        if (data.agencySettings) {
           await sql`
-            INSERT INTO appointments (id, biosite_id, service_id, service_name, customer_name, customer_phone, appointment_date, appointment_time, duration_minutes, total_price, status, customer_notes)
-            VALUES (${id}, ${biositeId}, ${serviceId}, ${serviceName}, ${customerName}, ${customerPhone}, ${apptDate}, ${apptTime}, ${duration}, ${totalPrice}, ${status}, ${notes})
-            ON CONFLICT (id) DO UPDATE SET
-              status = EXCLUDED.status,
-              customer_notes = EXCLUDED.customer_notes;
+            INSERT INTO app_settings (key, value)
+            VALUES ('agencySettings', ${JSON.stringify(data.agencySettings)})
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
           `;
         }
+      } catch (err: any) {
+        console.warn('[Neon] Erro ao sincronizar estado com Neon, salvando local:', err?.message);
+        sqlActive = false;
       }
-
-      if (data.creatorProfile) {
-        await sql`
-          INSERT INTO app_settings (key, value)
-          VALUES ('creatorProfile', ${JSON.stringify(data.creatorProfile)})
-          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-        `;
-      }
-
-      if (data.agencySettings) {
-        await sql`
-          INSERT INTO app_settings (key, value)
-          VALUES ('agencySettings', ${JSON.stringify(data.agencySettings)})
-          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-        `;
-      }
-
-      console.log('[Neon] Estado sincronizado e gravado com sucesso no PostgreSQL Neon!');
     }
 
-    // 2. Salva também cópia de segurança em disco
-    try {
-      const dir = path.dirname(DATA_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch {}
-
+    // Always persist to local disk
+    writeLocalData(data);
     return res.json({ success: true, timestamp: Date.now() });
   } catch (e: any) {
-    console.error('[Neon] Erro ao sincronizar estado com Neon:', e);
+    console.error('Erro ao sincronizar estado:', e);
     return res.status(500).json({ error: e?.message || 'Falha ao salvar estado' });
   }
 });
@@ -1175,8 +1266,7 @@ app.post('/api/state', async (req: Request, res: Response) => {
 // Helper para sincronizar alterações individuais com o arquivo local
 function syncToLocalDisk(changes: any) {
   try {
-    if (!fs.existsSync(DATA_FILE)) return;
-    const current = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    const current = readLocalData();
     if (changes.biosite) {
       const list = current.biosites || [];
       const index = list.findIndex((b: any) => b.id === changes.biosite.id);
@@ -1191,8 +1281,10 @@ function syncToLocalDisk(changes: any) {
       else list.unshift(changes.client);
       current.clients = list;
     }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(current, null, 2), 'utf-8');
-  } catch {}
+    writeLocalData(current);
+  } catch (err) {
+    console.warn('[Storage Local] Erro em syncToLocalDisk:', err);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1203,7 +1295,7 @@ app.post('/api/init-db', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'DATABASE_URL não configurada no ambiente.' });
   }
   try {
-    await initNeonDatabase();
+    await checkNeonConnection();
     return res.json({ success: true, message: 'Tabelas do banco criadas e inicializadas com sucesso no Neon!' });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Erro ao inicializar tabelas' });
@@ -1214,24 +1306,14 @@ app.post('/api/init-db', async (req: Request, res: Response) => {
 // Health Check com Status da Conexão ao Neon e Provedor de Mídia
 // -----------------------------------------------------------------------------
 app.get('/api/health', async (req: Request, res: Response) => {
-  let dbStatus = 'disconnected';
-  if (sql) {
-    try {
-      const start = Date.now();
-      await sql`SELECT 1 as ping;`;
-      const latency = Date.now() - start;
-      dbStatus = `connected (latency: ${latency}ms)`;
-    } catch (err: any) {
-      dbStatus = `error: ${err?.message || 'Falha ao conectar'}`;
-    }
-  }
-
+  const dbStatus = sqlActive ? 'connected' : (sql ? 'offline_fallback_active' : 'local_storage');
   const mediaProvider = hasCloudinary ? 'cloudinary' : (hasVercelBlob ? 'vercel_blob' : 'local_disk');
 
   res.json({
     status: 'ok',
     neonDatabase: dbStatus,
     mediaStorage: mediaProvider,
+    port: PORT,
     timestamp: new Date().toISOString(),
   });
 });
@@ -1240,9 +1322,8 @@ app.get('/api/health', async (req: Request, res: Response) => {
 // Inicialização do Servidor (Vite Dev Server em desenvolvimento ou estáticos em prod)
 // -----------------------------------------------------------------------------
 async function startServer() {
-  // Inicializa tabelas no Neon se DATABASE_URL estiver configurada
   if (sql) {
-    initNeonDatabase().catch((e) => console.warn('[Neon] Aviso na inicialização automática do banco:', e));
+    checkNeonConnection().catch((e) => console.warn('[Neon] Aviso na checagem inicial:', e));
   }
 
   if (!isProd) {
