@@ -232,5 +232,17 @@
       "createdAt": "2026-02-15T10:00:00.000Z",
       "updatedAt": "2026-10-24T18:00:00.000Z"
     }
+  ],
+  "clients": [
+    {
+      "id": "client-test-1",
+      "name": "Teste Silva",
+      "email": "teste@silva.com",
+      "phone": "(11) 98888-7777",
+      "status": "active",
+      "role": "client",
+      "assignedBiositeIds": [],
+      "permissions": []
+    }
   ]
 }

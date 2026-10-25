@@ -263,17 +263,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       role: 'client',
     };
     setClients(prev => [newClient, ...prev]);
+    fetch('/api/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newClient),
+    }).catch(console.warn);
     showToast(`Cliente "${newClient.name}" cadastrado com sucesso!`, 'success');
     return newClient;
   };
 
   const updateClient = (id: string, data: Partial<ClientUser>) => {
     setClients(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    fetch(`/api/clients/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).catch(console.warn);
     showToast('Dados do cliente atualizados!', 'success');
   };
 
   const deleteClient = (id: string) => {
     setClients(prev => prev.filter(c => c.id !== id));
+    fetch(`/api/clients/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(console.warn);
     showToast('Cliente removido com sucesso!', 'info');
   };
 
@@ -336,7 +349,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetch('/api/state')
       .then(res => res.ok ? res.json() : null)
       .then(serverState => {
-        if (serverState.biosites && Array.isArray(serverState.biosites)) {
+        if (!isMounted || !serverState) return;
+        if (serverState.biosites && Array.isArray(serverState.biosites) && serverState.biosites.length > 0) {
           const sanitized = serverState.biosites.map((b: any) => ({
             ...b,
             businessHours: b.businessHours || [],
@@ -348,13 +362,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setBiosites(sanitized);
           safeSetItem('biosaas_biosites', JSON.stringify(sanitized));
         }
+        if (serverState.clients && Array.isArray(serverState.clients) && serverState.clients.length > 0) {
+          setClients(serverState.clients);
+          safeSetItem('biosaas_clients', JSON.stringify(serverState.clients));
+        }
         if (serverState.services && Array.isArray(serverState.services)) {
           setServices(serverState.services);
           safeSetItem('biosaas_services', JSON.stringify(serverState.services));
         }
+        if (serverState.professionals && Array.isArray(serverState.professionals)) {
+          setProfessionals(serverState.professionals);
+          safeSetItem('biosaas_professionals', JSON.stringify(serverState.professionals));
+        }
+        if (serverState.appointments && Array.isArray(serverState.appointments)) {
+          setAppointments(serverState.appointments);
+          safeSetItem('biosaas_appointments', JSON.stringify(serverState.appointments));
+        }
         if (serverState.creatorProfile) {
           setCreatorProfile(serverState.creatorProfile);
           safeSetItem('biosaas_creator_profile', JSON.stringify(serverState.creatorProfile));
+        }
+        if (serverState.agencySettings) {
+          setAgencySettings(serverState.agencySettings);
+          safeSetItem('biosaas_agency', JSON.stringify(serverState.agencySettings));
         }
       })
       .catch(() => {});
@@ -369,14 +399,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           biosites,
+          clients,
           services,
+          professionals,
+          appointments,
           creatorProfile,
           agencySettings,
         }),
       }).catch(() => {});
     }, 1500);
     return () => clearTimeout(timer);
-  }, [biosites, services, creatorProfile, agencySettings]);
+  }, [biosites, clients, services, professionals, appointments, creatorProfile, agencySettings]);
 
   useEffect(() => {
     safeSetItem('biosaas_biosites', JSON.stringify(biosites));
@@ -485,12 +518,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBiosites(prev => [newSite, ...prev]);
     setActiveBiositeId(newSite.id);
+    fetch('/api/biosites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSite),
+    }).catch(console.warn);
     showToast(`Bio Site "${newSite.title}" criado com sucesso!`);
     return newSite;
   };
 
   const updateBiosite = (id: string, data: Partial<Biosite>) => {
-    setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...data, updatedAt: new Date().toISOString() } : site));
+    const updatedPayload = { ...data, updatedAt: new Date().toISOString() };
+    setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...updatedPayload } : site));
+    fetch(`/api/biosites/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPayload),
+    }).catch(console.warn);
     showToast('Alterações salvas com sucesso!');
   };
 
@@ -498,6 +542,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBiosites(prev => prev.filter(site => site.id !== id));
     setServices(prev => prev.filter(service => service.biositeId !== id));
     setAppointments(prev => prev.filter(app => app.biositeId !== id));
+    fetch(`/api/biosites/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(console.warn);
     if (activeBiositeId === id && biosites.length > 1) {
       const remaining = biosites.filter(s => s.id !== id);
       setActiveBiositeId(remaining[0]?.id || '');

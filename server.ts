@@ -1,111 +1,1075 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import dotenv from 'dotenv';
+import { neon } from '@neondatabase/serverless';
+
+// Load environment variables (.env, .env.local, etc.)
+dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === 'production';
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_FILE = path.resolve(__dirname, 'src/data/persisted_state.json');
 const UPLOADS_DIR = path.resolve(__dirname, 'public/uploads');
 
-// Ensure directories exist
+// Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-async function startServer() {
-  const app = express();
-  
-  // High body size limit for media/images
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+// Neon PostgreSQL client initialization
+const databaseUrl = process.env.DATABASE_URL;
+const sql = databaseUrl ? neon(databaseUrl) : null;
 
-  // Serve uploads directory statically at /uploads
-  app.use('/uploads', express.static(UPLOADS_DIR));
+if (databaseUrl) {
+  console.log('[Neon] DATABASE_URL detectada! Conexão com banco Neon configurada.');
+} else {
+  console.warn('[Neon] ATENÇÃO: DATABASE_URL não definida no ambiente. Operando com fallback local em disco (persisted_state.json).');
+}
 
-  // Endpoint to handle permanent file uploads from any device
-  app.post('/api/upload', (req, res) => {
-    try {
-      const { filename, data } = req.body;
-      if (!data) {
-        return res.status(400).json({ error: 'No data provided' });
+// -----------------------------------------------------------------------------
+// Database Schema Initialization (Executa CREATE TABLE IF NOT EXISTS automaticamente)
+// -----------------------------------------------------------------------------
+async function initNeonDatabase() {
+  if (!sql) return;
+  try {
+    console.log('[Neon] Verificando e criando tabelas se necessário...');
+    await sql`
+      CREATE TABLE IF NOT EXISTS clients (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        phone VARCHAR(50),
+        role VARCHAR(50) DEFAULT 'client',
+        status VARCHAR(50) DEFAULT 'active',
+        assigned_biosite_ids JSONB DEFAULT '[]'::jsonb,
+        permissions JSONB DEFAULT '[]'::jsonb,
+        must_change_password BOOLEAN DEFAULT false,
+        temporary_password VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS biosites (
+        id VARCHAR(255) PRIMARY KEY,
+        agency_id VARCHAR(255) DEFAULT 'agency-1',
+        client_user_id VARCHAR(255),
+        client_name VARCHAR(255),
+        client_email VARCHAR(255),
+        client_phone VARCHAR(50),
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        title VARCHAR(255) NOT NULL,
+        subtitle TEXT DEFAULT '',
+        description TEXT DEFAULT '',
+        category VARCHAR(100) DEFAULT 'manicure',
+        avatar_url TEXT DEFAULT '',
+        logo_shape VARCHAR(50) DEFAULT 'circle',
+        logo_transparent BOOLEAN DEFAULT false,
+        cover_type VARCHAR(50) DEFAULT 'image',
+        cover_url TEXT DEFAULT '',
+        video_url TEXT DEFAULT '',
+        cover_gradient TEXT DEFAULT '',
+        instagram_handle VARCHAR(100) DEFAULT '',
+        theme_config JSONB DEFAULT '{}'::jsonb,
+        contact_buttons JSONB DEFAULT '[]'::jsonb,
+        pix_config JSONB DEFAULT '{}'::jsonb,
+        wifi_config JSONB DEFAULT '{}'::jsonb,
+        location_config JSONB DEFAULT '{}'::jsonb,
+        business_hours JSONB DEFAULT '[]'::jsonb,
+        footer_branding JSONB DEFAULT '{}'::jsonb,
+        catalogs JSONB DEFAULT '[]'::jsonb,
+        catalog_settings JSONB DEFAULT '{"autoplay": true, "interval": 5}'::jsonb,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_biosites_slug ON biosites(slug);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_biosites_client_user ON biosites(client_user_id);`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS services (
+        id VARCHAR(255) PRIMARY KEY,
+        biosite_id VARCHAR(255) NOT NULL REFERENCES biosites(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT DEFAULT '',
+        category VARCHAR(100) DEFAULT '',
+        duration_minutes INT DEFAULT 30,
+        price NUMERIC(10, 2) DEFAULT 0.00,
+        promotional_price NUMERIC(10, 2),
+        images JSONB DEFAULT '[]'::jsonb,
+        order_index INT DEFAULT 0,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_services_biosite_id ON services(biosite_id);`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS professionals (
+        id VARCHAR(255) PRIMARY KEY,
+        biosite_id VARCHAR(255) NOT NULL REFERENCES biosites(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        photo_url TEXT DEFAULT '',
+        color VARCHAR(50) DEFAULT '#1d4ed8',
+        active BOOLEAN DEFAULT true,
+        services JSONB DEFAULT '[]'::jsonb,
+        work_schedule JSONB DEFAULT '[]'::jsonb,
+        blocked_dates JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_professionals_biosite_id ON professionals(biosite_id);`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS appointments (
+        id VARCHAR(255) PRIMARY KEY,
+        biosite_id VARCHAR(255) NOT NULL REFERENCES biosites(id) ON DELETE CASCADE,
+        service_id VARCHAR(255),
+        service_name VARCHAR(255),
+        customer_name VARCHAR(255) NOT NULL,
+        customer_phone VARCHAR(50) NOT NULL,
+        appointment_date VARCHAR(20) NOT NULL,
+        appointment_time VARCHAR(20) NOT NULL,
+        duration_minutes INT DEFAULT 30,
+        total_price NUMERIC(10, 2) DEFAULT 0.00,
+        status VARCHAR(50) DEFAULT 'pending',
+        customer_notes TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_appointments_biosite_id ON appointments(biosite_id);`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+
+    console.log('[Neon] Tabelas inicializadas com sucesso no banco de dados!');
+
+    // Se a tabela de biosites estiver vazia, semeia com os dados existentes do persisted_state.json
+    const countResult = await sql`SELECT COUNT(*)::int as total FROM biosites`;
+    if (countResult[0]?.total === 0 && fs.existsSync(DATA_FILE)) {
+      console.log('[Neon] Banco vazio detectado. Semeando dados iniciais a partir do persisted_state.json...');
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.biosites && Array.isArray(data.biosites)) {
+        for (const b of data.biosites) {
+          await upsertBiositeToDb(b);
+        }
       }
-
-      let base64Content = data;
-      let ext = 'jpg';
-
-      if (filename && filename.includes('.')) {
-        ext = filename.split('.').pop() || 'jpg';
-      } else if (data.startsWith('data:image/')) {
-        const match = data.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
-        if (match) ext = match[1] === 'jpeg' ? 'jpg' : match[1];
-      } else if (data.startsWith('data:video/')) {
-        const match = data.match(/^data:video\/([a-zA-Z0-9+]+);base64,/);
-        if (match) ext = match[1];
+      if (data.services && Array.isArray(data.services)) {
+        for (const s of data.services) {
+          await upsertServiceToDb(s);
+        }
       }
-
-      if (data.includes(';base64,')) {
-        base64Content = data.split(';base64,')[1];
+      if (data.creatorProfile) {
+        await sql`
+          INSERT INTO app_settings (key, value)
+          VALUES ('creatorProfile', ${JSON.stringify(data.creatorProfile)})
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
       }
-
-      const cleanExt = ext.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5) || 'jpg';
-      const uniqueName = `media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${cleanExt}`;
-      const filePath = path.join(UPLOADS_DIR, uniqueName);
-      const buffer = Buffer.from(base64Content, 'base64');
-
-      fs.writeFileSync(filePath, buffer);
-      const publicUrl = `/uploads/${uniqueName}`;
-      console.log(`[Server] Saved upload: ${publicUrl} (${buffer.length} bytes)`);
-
-      return res.json({ success: true, url: publicUrl, size: buffer.length });
-    } catch (err: any) {
-      console.error('[Server] Upload processing error:', err);
-      return res.status(500).json({ error: err?.message || 'Failed to save file' });
+      if (data.agencySettings) {
+        await sql`
+          INSERT INTO app_settings (key, value)
+          VALUES ('agencySettings', ${JSON.stringify(data.agencySettings)})
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
+      }
+      console.log('[Neon] Dados iniciais semeados com sucesso!');
     }
-  });
+  } catch (err) {
+    console.error('[Neon] Erro ao inicializar tabelas no Neon:', err);
+  }
+}
 
-  // API to load synced application state for all devices (mobile, incognito, desktop)
-  app.get('/api/state', (req, res) => {
+// -----------------------------------------------------------------------------
+// Helpers de Mapeamento Linha BD <-> Objeto Front-End
+// -----------------------------------------------------------------------------
+function parseJsonField<T>(field: any, defaultValue: T): T {
+  if (!field) return defaultValue;
+  if (typeof field === 'string') {
     try {
-      if (fs.existsSync(DATA_FILE)) {
+      return JSON.parse(field);
+    } catch {
+      return defaultValue;
+    }
+  }
+  return field as T;
+}
+
+function dbRowToClient(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone || '',
+    role: row.role || 'client',
+    status: row.status || 'active',
+    assignedBiositeIds: parseJsonField<string[]>(row.assigned_biosite_ids, []),
+    permissions: parseJsonField<string[]>(row.permissions, []),
+    mustChangePassword: Boolean(row.must_change_password),
+    temporaryPassword: row.temporary_password || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+function dbRowToBiosite(row: any) {
+  return {
+    id: row.id,
+    agencyId: row.agency_id || 'agency-1',
+    clientUserId: row.client_user_id || '',
+    clientName: row.client_name || '',
+    clientEmail: row.client_email || '',
+    clientPhone: row.client_phone || '',
+    slug: row.slug,
+    title: row.title,
+    subtitle: row.subtitle || '',
+    description: row.description || '',
+    category: row.category || 'manicure',
+    avatarUrl: row.avatar_url || '',
+    logoShape: row.logo_shape || 'circle',
+    logoTransparent: Boolean(row.logo_transparent),
+    coverType: row.cover_type || 'image',
+    coverUrl: row.cover_url || '',
+    videoUrl: row.video_url || '',
+    coverGradient: row.cover_gradient || '',
+    instagramHandle: row.instagram_handle || '',
+    themeConfig: parseJsonField(row.theme_config, {}),
+    contactButtons: parseJsonField(row.contact_buttons, []),
+    pixConfig: parseJsonField(row.pix_config, { enabled: false }),
+    wifiConfig: parseJsonField(row.wifi_config, { enabled: false }),
+    locationConfig: parseJsonField(row.location_config, { enabled: false }),
+    businessHours: parseJsonField(row.business_hours, []),
+    footerBranding: parseJsonField(row.footer_branding, { enabled: true }),
+    catalogs: parseJsonField(row.catalogs, []),
+    catalogSettings: parseJsonField(row.catalog_settings, { autoplay: true, interval: 5 }),
+    status: row.status || 'active',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+function dbRowToService(row: any) {
+  return {
+    id: row.id,
+    biositeId: row.biosite_id,
+    name: row.name,
+    description: row.description || '',
+    category: row.category || '',
+    durationMinutes: Number(row.duration_minutes) || 30,
+    price: Number(row.price) || 0,
+    promotionalPrice: row.promotional_price !== null && row.promotional_price !== undefined ? Number(row.promotional_price) : undefined,
+    images: parseJsonField<string[]>(row.images, []),
+    orderIndex: Number(row.order_index) || 0,
+    active: row.active ?? true,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+  };
+}
+
+function dbRowToProfessional(row: any) {
+  return {
+    id: row.id,
+    biositeId: row.biosite_id,
+    name: row.name,
+    photoUrl: row.photo_url || '',
+    color: row.color || '#1d4ed8',
+    active: row.active ?? true,
+    services: parseJsonField(row.services, []),
+    workSchedule: parseJsonField(row.work_schedule, []),
+    blockedDates: parseJsonField(row.blocked_dates, []),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+function dbRowToAppointment(row: any) {
+  return {
+    id: row.id,
+    biositeId: row.biosite_id,
+    serviceId: row.service_id || '',
+    serviceName: row.service_name || '',
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    appointmentDate: row.appointment_date,
+    appointmentTime: row.appointment_time,
+    durationMinutes: Number(row.duration_minutes) || 30,
+    totalPrice: Number(row.total_price) || 0,
+    status: row.status || 'pending',
+    customerNotes: row.customer_notes || '',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Funções SQL de Upsert (Inserir ou Atualizar) para Neon
+// -----------------------------------------------------------------------------
+async function upsertClientToDb(client: any) {
+  if (!sql) return;
+  const id = client.id || `client-${Date.now()}`;
+  const name = client.name || 'Cliente';
+  const email = client.email;
+  const phone = client.phone || '';
+  const role = client.role || 'client';
+  const status = client.status || 'active';
+  const assigned = JSON.stringify(client.assignedBiositeIds || []);
+  const permissions = JSON.stringify(client.permissions || []);
+  const mustChange = Boolean(client.mustChangePassword);
+  const tempPass = client.temporaryPassword || '';
+
+  await sql`
+    INSERT INTO clients (
+      id, name, email, phone, role, status,
+      assigned_biosite_ids, permissions, must_change_password, temporary_password
+    )
+    VALUES (
+      ${id}, ${name}, ${email}, ${phone}, ${role}, ${status},
+      ${assigned}::jsonb, ${permissions}::jsonb, ${mustChange}, ${tempPass}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      role = EXCLUDED.role,
+      status = EXCLUDED.status,
+      assigned_biosite_ids = EXCLUDED.assigned_biosite_ids,
+      permissions = EXCLUDED.permissions,
+      must_change_password = EXCLUDED.must_change_password,
+      temporary_password = EXCLUDED.temporary_password,
+      updated_at = NOW();
+  `;
+}
+
+async function upsertBiositeToDb(b: any) {
+  if (!sql) return;
+  const id = b.id || `bio-${Date.now()}`;
+  const agencyId = b.agencyId || 'agency-1';
+  const clientUserId = b.clientUserId || null;
+  const clientName = b.clientName || '';
+  const clientEmail = b.clientEmail || '';
+  const clientPhone = b.clientPhone || '';
+  const slug = b.slug || `site-${Date.now()}`;
+  const title = b.title || 'Meu Bio Site';
+  const subtitle = b.subtitle || '';
+  const description = b.description || '';
+  const category = b.category || 'manicure';
+  const avatarUrl = b.avatarUrl || '';
+  const logoShape = b.logoShape || 'circle';
+  const logoTransparent = Boolean(b.logoTransparent);
+  const coverType = b.coverType || 'image';
+  const coverUrl = b.coverUrl || '';
+  const videoUrl = b.videoUrl || '';
+  const coverGradient = b.coverGradient || '';
+  const instagramHandle = b.instagramHandle || '';
+  const themeConfig = JSON.stringify(b.themeConfig || {});
+  const contactButtons = JSON.stringify(b.contactButtons || []);
+  const pixConfig = JSON.stringify(b.pixConfig || {});
+  const wifiConfig = JSON.stringify(b.wifiConfig || {});
+  const locationConfig = JSON.stringify(b.locationConfig || {});
+  const businessHours = JSON.stringify(b.businessHours || []);
+  const footerBranding = JSON.stringify(b.footerBranding || {});
+  const catalogs = JSON.stringify(b.catalogs || []);
+  const catalogSettings = JSON.stringify(b.catalogSettings || { autoplay: true, interval: 5 });
+  const status = b.status || 'active';
+
+  await sql`
+    INSERT INTO biosites (
+      id, agency_id, client_user_id, client_name, client_email, client_phone,
+      slug, title, subtitle, description, category, avatar_url,
+      logo_shape, logo_transparent, cover_type, cover_url, video_url, cover_gradient,
+      instagram_handle, theme_config, contact_buttons, pix_config, wifi_config,
+      location_config, business_hours, footer_branding, catalogs, catalog_settings,
+      status
+    )
+    VALUES (
+      ${id}, ${agencyId}, ${clientUserId}, ${clientName}, ${clientEmail}, ${clientPhone},
+      ${slug}, ${title}, ${subtitle}, ${description}, ${category}, ${avatarUrl},
+      ${logoShape}, ${logoTransparent}, ${coverType}, ${coverUrl}, ${videoUrl}, ${coverGradient},
+      ${instagramHandle}, ${themeConfig}::jsonb, ${contactButtons}::jsonb, ${pixConfig}::jsonb, ${wifiConfig}::jsonb,
+      ${locationConfig}::jsonb, ${businessHours}::jsonb, ${footerBranding}::jsonb, ${catalogs}::jsonb, ${catalogSettings}::jsonb,
+      ${status}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      agency_id = EXCLUDED.agency_id,
+      client_user_id = EXCLUDED.client_user_id,
+      client_name = EXCLUDED.client_name,
+      client_email = EXCLUDED.client_email,
+      client_phone = EXCLUDED.client_phone,
+      slug = EXCLUDED.slug,
+      title = EXCLUDED.title,
+      subtitle = EXCLUDED.subtitle,
+      description = EXCLUDED.description,
+      category = EXCLUDED.category,
+      avatar_url = EXCLUDED.avatar_url,
+      logo_shape = EXCLUDED.logo_shape,
+      logo_transparent = EXCLUDED.logo_transparent,
+      cover_type = EXCLUDED.cover_type,
+      cover_url = EXCLUDED.cover_url,
+      video_url = EXCLUDED.video_url,
+      cover_gradient = EXCLUDED.cover_gradient,
+      instagram_handle = EXCLUDED.instagram_handle,
+      theme_config = EXCLUDED.theme_config,
+      contact_buttons = EXCLUDED.contact_buttons,
+      pix_config = EXCLUDED.pix_config,
+      wifi_config = EXCLUDED.wifi_config,
+      location_config = EXCLUDED.location_config,
+      business_hours = EXCLUDED.business_hours,
+      footer_branding = EXCLUDED.footer_branding,
+      catalogs = EXCLUDED.catalogs,
+      catalog_settings = EXCLUDED.catalog_settings,
+      status = EXCLUDED.status,
+      updated_at = NOW();
+  `;
+}
+
+async function upsertServiceToDb(s: any) {
+  if (!sql) return;
+  const id = s.id || `srv-${Date.now()}`;
+  const biositeId = s.biositeId;
+  const name = s.name || 'Serviço';
+  const description = s.description || '';
+  const category = s.category || '';
+  const durationMinutes = Number(s.durationMinutes) || 30;
+  const price = Number(s.price) || 0;
+  const promotionalPrice = s.promotionalPrice !== undefined ? Number(s.promotionalPrice) : null;
+  const images = JSON.stringify(s.images || []);
+  const orderIndex = Number(s.orderIndex) || 0;
+  const active = s.active ?? true;
+
+  await sql`
+    INSERT INTO services (
+      id, biosite_id, name, description, category,
+      duration_minutes, price, promotional_price, images, order_index, active
+    )
+    VALUES (
+      ${id}, ${biositeId}, ${name}, ${description}, ${category},
+      ${durationMinutes}, ${price}, ${promotionalPrice}, ${images}::jsonb, ${orderIndex}, ${active}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      biosite_id = EXCLUDED.biosite_id,
+      name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      category = EXCLUDED.category,
+      duration_minutes = EXCLUDED.duration_minutes,
+      price = EXCLUDED.price,
+      promotional_price = EXCLUDED.promotional_price,
+      images = EXCLUDED.images,
+      order_index = EXCLUDED.order_index,
+      active = EXCLUDED.active,
+      updated_at = NOW();
+  `;
+}
+
+// -----------------------------------------------------------------------------
+// Criação do Aplicativo Express
+// -----------------------------------------------------------------------------
+const app = express();
+
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Servir diretório estático de uploads
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// -----------------------------------------------------------------------------
+// Rota de Upload de Mídias
+// -----------------------------------------------------------------------------
+app.post('/api/upload', (req: Request, res: Response) => {
+  try {
+    const { filename, data } = req.body;
+    if (!data) {
+      return res.status(400).json({ error: 'Nenhum dado enviado' });
+    }
+
+    let base64Content = data;
+    let ext = 'jpg';
+
+    if (filename && filename.includes('.')) {
+      ext = filename.split('.').pop() || 'jpg';
+    } else if (data.startsWith('data:image/')) {
+      const match = data.match(/^data:image\/([a-zA-Z0-9+]+);base64,/);
+      if (match) ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    } else if (data.startsWith('data:video/')) {
+      const match = data.match(/^data:video\/([a-zA-Z0-9+]+);base64,/);
+      if (match) ext = match[1];
+    }
+
+    if (data.includes(';base64,')) {
+      base64Content = data.split(';base64,')[1];
+    }
+
+    const cleanExt = ext.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5) || 'jpg';
+    const uniqueName = `media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${cleanExt}`;
+    const filePath = path.join(UPLOADS_DIR, uniqueName);
+    const buffer = Buffer.from(base64Content, 'base64');
+
+    fs.writeFileSync(filePath, buffer);
+    const publicUrl = `/uploads/${uniqueName}`;
+    console.log(`[Upload] Salvo: ${publicUrl} (${buffer.length} bytes)`);
+
+    return res.json({ success: true, url: publicUrl, size: buffer.length });
+  } catch (err: any) {
+    console.error('[Upload] Erro ao processar:', err);
+    return res.status(500).json({ error: err?.message || 'Falha ao salvar arquivo' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// CRUD DE CLIENTES (Neon PostgreSQL)
+// -----------------------------------------------------------------------------
+
+// 1. Listar todos os clientes
+app.get('/api/clients', async (req: Request, res: Response) => {
+  try {
+    if (sql) {
+      const rows = await sql`SELECT * FROM clients ORDER BY created_at DESC;`;
+      return res.json(rows.map(dbRowToClient));
+    }
+    // Fallback local se não houver banco
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      return res.json(data.clients || []);
+    }
+    return res.json([]);
+  } catch (err: any) {
+    console.error('[Neon] Erro ao listar clientes:', err);
+    return res.status(500).json({ error: 'Erro ao consultar clientes no banco' });
+  }
+});
+
+// 2. Buscar cliente por ID
+app.get('/api/clients/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    if (sql) {
+      const rows = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Cliente não encontrado' });
+      }
+      return res.json(dbRowToClient(rows[0]));
+    }
+    return res.status(404).json({ error: 'Cliente não encontrado' });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao buscar cliente ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao buscar cliente' });
+  }
+});
+
+// 3. Criar novo cliente
+app.post('/api/clients', async (req: Request, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data.name || !data.email) {
+      return res.status(400).json({ error: 'Nome e e-mail são obrigatórios.' });
+    }
+
+    const client = {
+      ...data,
+      id: data.id || `client-${Date.now()}`,
+      status: data.status || 'active',
+      role: data.role || 'client',
+      assignedBiositeIds: data.assignedBiositeIds || [],
+      permissions: data.permissions || [],
+    };
+
+    if (sql) {
+      await upsertClientToDb(client);
+      console.log(`[Neon] Cliente ${client.name} inserido no banco com sucesso.`);
+    }
+
+    // Salva cópia de segurança em disco
+    syncToLocalDisk({ client });
+
+    return res.status(201).json({ success: true, client });
+  } catch (err: any) {
+    console.error('[Neon] Erro ao criar cliente:', err);
+    return res.status(500).json({ error: err?.message || 'Erro ao criar cliente' });
+  }
+});
+
+// 4. Atualizar cliente
+app.put('/api/clients/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const data = req.body;
+    if (sql) {
+      const existing = await sql`SELECT * FROM clients WHERE id = ${id} LIMIT 1;`;
+      if (existing.length === 0) {
+        // Se ainda não existe, cria com o ID especificado
+        await upsertClientToDb({ ...data, id });
+      } else {
+        const merged = { ...dbRowToClient(existing[0]), ...data, id };
+        await upsertClientToDb(merged);
+      }
+      console.log(`[Neon] Cliente ${id} atualizado com sucesso no banco.`);
+    }
+    syncToLocalDisk({ client: { ...data, id } });
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao atualizar cliente ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao atualizar cliente' });
+  }
+});
+
+// 5. Excluir cliente
+app.delete('/api/clients/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    if (sql) {
+      await sql`DELETE FROM clients WHERE id = ${id};`;
+      console.log(`[Neon] Cliente ${id} removido do banco.`);
+    }
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao excluir cliente ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao excluir cliente' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// CRUD DE MINISITES / BIO SITES (Neon PostgreSQL)
+// -----------------------------------------------------------------------------
+
+// 1. Listar todos os biosites
+app.get('/api/biosites', async (req: Request, res: Response) => {
+  try {
+    if (sql) {
+      const rows = await sql`SELECT * FROM biosites ORDER BY created_at DESC;`;
+      return res.json(rows.map(dbRowToBiosite));
+    }
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      return res.json(data.biosites || []);
+    }
+    return res.json([]);
+  } catch (err: any) {
+    console.error('[Neon] Erro ao listar biosites:', err);
+    return res.status(500).json({ error: 'Erro ao listar biosites do banco' });
+  }
+});
+
+// 2. Buscar biosite por ID ou Slug
+app.get('/api/biosites/:idOrSlug', async (req: Request, res: Response) => {
+  const { idOrSlug } = req.params;
+  try {
+    if (sql) {
+      const rows = await sql`
+        SELECT * FROM biosites 
+        WHERE id = ${idOrSlug} OR LOWER(slug) = LOWER(${idOrSlug}) 
+        LIMIT 1;
+      `;
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Bio Site não encontrado' });
+      }
+      return res.json(dbRowToBiosite(rows[0]));
+    }
+    return res.status(404).json({ error: 'Bio Site não encontrado' });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao buscar biosite ${idOrSlug}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao buscar biosite' });
+  }
+});
+
+// 3. Criar novo biosite
+app.post('/api/biosites', async (req: Request, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data.title || !data.slug) {
+      return res.status(400).json({ error: 'Título e slug são obrigatórios.' });
+    }
+
+    const biosite = {
+      ...data,
+      id: data.id || `bio-${Date.now()}`,
+      status: data.status || 'active',
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (sql) {
+      await upsertBiositeToDb(biosite);
+      console.log(`[Neon] Bio Site "${biosite.title}" inserido no banco com sucesso.`);
+    }
+
+    syncToLocalDisk({ biosite });
+    return res.status(201).json({ success: true, biosite });
+  } catch (err: any) {
+    console.error('[Neon] Erro ao criar biosite:', err);
+    return res.status(500).json({ error: err?.message || 'Erro ao criar biosite' });
+  }
+});
+
+// 4. Atualizar biosite
+app.put('/api/biosites/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const data = req.body;
+    if (sql) {
+      const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
+      if (existing.length === 0) {
+        await upsertBiositeToDb({ ...data, id });
+      } else {
+        const merged = { ...dbRowToBiosite(existing[0]), ...data, id };
+        await upsertBiositeToDb(merged);
+      }
+      console.log(`[Neon] Bio Site ${id} atualizado no banco.`);
+    }
+    syncToLocalDisk({ biosite: { ...data, id } });
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao atualizar biosite ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao atualizar biosite' });
+  }
+});
+
+// 5. Excluir biosite
+app.delete('/api/biosites/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    if (sql) {
+      await sql`DELETE FROM biosites WHERE id = ${id};`;
+      console.log(`[Neon] Bio Site ${id} removido do banco (e serviços associados deletados em cascata).`);
+    }
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao excluir biosite ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao excluir biosite' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// CRUD DE SERVIÇOS (Neon PostgreSQL)
+// -----------------------------------------------------------------------------
+app.get('/api/services', async (req: Request, res: Response) => {
+  const { biositeId } = req.query;
+  try {
+    if (sql) {
+      let rows;
+      if (biositeId) {
+        rows = await sql`SELECT * FROM services WHERE biosite_id = ${String(biositeId)} ORDER BY order_index ASC, created_at ASC;`;
+      } else {
+        rows = await sql`SELECT * FROM services ORDER BY order_index ASC, created_at ASC;`;
+      }
+      return res.json(rows.map(dbRowToService));
+    }
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+      return res.json(data.services || []);
+    }
+    return res.json([]);
+  } catch (err: any) {
+    console.error('[Neon] Erro ao listar serviços:', err);
+    return res.status(500).json({ error: 'Erro ao buscar serviços' });
+  }
+});
+
+app.post('/api/services', async (req: Request, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data.biositeId || !data.name) {
+      return res.status(400).json({ error: 'biositeId e name são obrigatórios.' });
+    }
+    const service = {
+      ...data,
+      id: data.id || `srv-${Date.now()}`,
+    };
+    if (sql) {
+      await upsertServiceToDb(service);
+    }
+    return res.status(201).json({ success: true, service });
+  } catch (err: any) {
+    console.error('[Neon] Erro ao criar serviço:', err);
+    return res.status(500).json({ error: err?.message || 'Erro ao criar serviço' });
+  }
+});
+
+app.put('/api/services/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const data = req.body;
+    if (sql) {
+      const existing = await sql`SELECT * FROM services WHERE id = ${id} LIMIT 1;`;
+      const merged = existing.length > 0 ? { ...dbRowToService(existing[0]), ...data, id } : { ...data, id };
+      await upsertServiceToDb(merged);
+    }
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao atualizar serviço ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao atualizar serviço' });
+  }
+});
+
+app.delete('/api/services/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    if (sql) {
+      await sql`DELETE FROM services WHERE id = ${id};`;
+    }
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Neon] Erro ao deletar serviço ${id}:`, err);
+    return res.status(500).json({ error: err?.message || 'Erro ao excluir serviço' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// ENDPOINTS DE SINCRONIZAÇÃO COMPLETA DE ESTADO (GET /api/state e POST /api/state)
+// Mantém total compatibilidade e sincronismo em tempo real com o AppContext do Front-end
+// -----------------------------------------------------------------------------
+
+app.get('/api/state', async (req: Request, res: Response) => {
+  try {
+    if (sql) {
+      // Consulta todas as tabelas em paralelo no Neon
+      const [biositeRows, clientRows, serviceRows, profRows, apptRows, settingsRows] = await Promise.all([
+        sql`SELECT * FROM biosites ORDER BY created_at DESC;`,
+        sql`SELECT * FROM clients ORDER BY created_at DESC;`,
+        sql`SELECT * FROM services ORDER BY order_index ASC, created_at ASC;`,
+        sql`SELECT * FROM professionals ORDER BY created_at ASC;`,
+        sql`SELECT * FROM appointments ORDER BY appointment_date DESC, appointment_time DESC;`,
+        sql`SELECT * FROM app_settings;`,
+      ]);
+
+      let creatorProfile = null;
+      let agencySettings = null;
+
+      for (const row of settingsRows) {
+        if (row.key === 'creatorProfile') creatorProfile = row.value;
+        if (row.key === 'agencySettings') agencySettings = row.value;
+      }
+
+      // Se o banco ainda não tem biosites mas existe o persisted_state local, carrega o local
+      if (biositeRows.length === 0 && fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf-8');
         return res.json(JSON.parse(raw));
       }
-    } catch (e) {
-      console.warn('[Server] Error reading persisted state:', e);
+
+      return res.json({
+        biosites: biositeRows.map(dbRowToBiosite),
+        clients: clientRows.map(dbRowToClient),
+        services: serviceRows.map(dbRowToService),
+        professionals: profRows.map(dbRowToProfessional),
+        appointments: apptRows.map(dbRowToAppointment),
+        creatorProfile,
+        agencySettings,
+      });
+    }
+
+    // Fallback: Leitura do arquivo em disco
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      return res.json(JSON.parse(raw));
     }
     return res.json(null);
-  });
-
-  // API to persist state across all devices
-  app.post('/api/state', (req, res) => {
-    try {
-      const data = req.body;
-      const dir = path.dirname(DATA_FILE);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
-      console.log('[Server] Saved updated application state to disk successfully.');
-      return res.json({ success: true, timestamp: Date.now() });
-    } catch (e: any) {
-      console.error('[Server] Error saving state:', e);
-      return res.status(500).json({ error: e?.message || 'Failed to save state' });
+  } catch (e: any) {
+    console.warn('[Neon] Erro ao ler estado unificado:', e?.message || e);
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+        return res.json(JSON.parse(raw));
+      } catch {}
     }
-  });
+    return res.status(500).json({ error: 'Falha ao carregar dados' });
+  }
+});
 
-  // Health check
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', time: new Date().toISOString() });
+app.post('/api/state', async (req: Request, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data) return res.json({ success: false });
+
+    // 1. Se o banco Neon estiver configurado, persiste entidades usando SQL real
+    if (sql) {
+      if (data.biosites && Array.isArray(data.biosites)) {
+        for (const b of data.biosites) {
+          await upsertBiositeToDb(b);
+        }
+      }
+
+      if (data.clients && Array.isArray(data.clients)) {
+        for (const c of data.clients) {
+          await upsertClientToDb(c);
+        }
+      }
+
+      if (data.services && Array.isArray(data.services)) {
+        for (const s of data.services) {
+          await upsertServiceToDb(s);
+        }
+      }
+
+      if (data.professionals && Array.isArray(data.professionals)) {
+        for (const p of data.professionals) {
+          const id = p.id || `prof-${Date.now()}`;
+          const biositeId = p.biositeId;
+          const name = p.name || 'Profissional';
+          const photoUrl = p.photoUrl || '';
+          const color = p.color || '#1d4ed8';
+          const active = p.active ?? true;
+          const servicesJson = JSON.stringify(p.services || []);
+          const scheduleJson = JSON.stringify(p.workSchedule || []);
+          const blockedJson = JSON.stringify(p.blockedDates || []);
+
+          await sql`
+            INSERT INTO professionals (id, biosite_id, name, photo_url, color, active, services, work_schedule, blocked_dates)
+            VALUES (${id}, ${biositeId}, ${name}, ${photoUrl}, ${color}, ${active}, ${servicesJson}::jsonb, ${scheduleJson}::jsonb, ${blockedJson}::jsonb)
+            ON CONFLICT (id) DO UPDATE SET
+              name = EXCLUDED.name,
+              photo_url = EXCLUDED.photo_url,
+              color = EXCLUDED.color,
+              active = EXCLUDED.active,
+              services = EXCLUDED.services,
+              work_schedule = EXCLUDED.work_schedule,
+              blocked_dates = EXCLUDED.blocked_dates;
+          `;
+        }
+      }
+
+      if (data.appointments && Array.isArray(data.appointments)) {
+        for (const a of data.appointments) {
+          const id = a.id || `app-${Date.now()}`;
+          const biositeId = a.biositeId;
+          const serviceId = a.serviceId || null;
+          const serviceName = a.serviceName || '';
+          const customerName = a.customerName || 'Cliente';
+          const customerPhone = a.customerPhone || '';
+          const apptDate = a.appointmentDate;
+          const apptTime = a.appointmentTime;
+          const duration = Number(a.durationMinutes) || 30;
+          const totalPrice = Number(a.totalPrice) || 0;
+          const status = a.status || 'pending';
+          const notes = a.customerNotes || '';
+
+          await sql`
+            INSERT INTO appointments (id, biosite_id, service_id, service_name, customer_name, customer_phone, appointment_date, appointment_time, duration_minutes, total_price, status, customer_notes)
+            VALUES (${id}, ${biositeId}, ${serviceId}, ${serviceName}, ${customerName}, ${customerPhone}, ${apptDate}, ${apptTime}, ${duration}, ${totalPrice}, ${status}, ${notes})
+            ON CONFLICT (id) DO UPDATE SET
+              status = EXCLUDED.status,
+              customer_notes = EXCLUDED.customer_notes;
+          `;
+        }
+      }
+
+      if (data.creatorProfile) {
+        await sql`
+          INSERT INTO app_settings (key, value)
+          VALUES ('creatorProfile', ${JSON.stringify(data.creatorProfile)})
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
+      }
+
+      if (data.agencySettings) {
+        await sql`
+          INSERT INTO app_settings (key, value)
+          VALUES ('agencySettings', ${JSON.stringify(data.agencySettings)})
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
+      }
+
+      console.log('[Neon] Estado sincronizado e gravado com sucesso no PostgreSQL Neon!');
+    }
+
+    // 2. Salva também cópia de segurança em disco
+    try {
+      const dir = path.dirname(DATA_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {}
+
+    return res.json({ success: true, timestamp: Date.now() });
+  } catch (e: any) {
+    console.error('[Neon] Erro ao sincronizar estado com Neon:', e);
+    return res.status(500).json({ error: e?.message || 'Falha ao salvar estado' });
+  }
+});
+
+// Helper para sincronizar alterações individuais com o arquivo local
+function syncToLocalDisk(changes: any) {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return;
+    const current = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    if (changes.biosite) {
+      const list = current.biosites || [];
+      const index = list.findIndex((b: any) => b.id === changes.biosite.id);
+      if (index >= 0) list[index] = { ...list[index], ...changes.biosite };
+      else list.unshift(changes.biosite);
+      current.biosites = list;
+    }
+    if (changes.client) {
+      const list = current.clients || [];
+      const index = list.findIndex((c: any) => c.id === changes.client.id);
+      if (index >= 0) list[index] = { ...list[index], ...changes.client };
+      else list.unshift(changes.client);
+      current.clients = list;
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(current, null, 2), 'utf-8');
+  } catch {}
+}
+
+// -----------------------------------------------------------------------------
+// Endpoint para Inicializar Tabelas Manualmente (se desejado)
+// -----------------------------------------------------------------------------
+app.post('/api/init-db', async (req: Request, res: Response) => {
+  if (!sql) {
+    return res.status(400).json({ error: 'DATABASE_URL não configurada no ambiente.' });
+  }
+  try {
+    await initNeonDatabase();
+    return res.json({ success: true, message: 'Tabelas do banco criadas e inicializadas com sucesso no Neon!' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Erro ao inicializar tabelas' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// Health Check com Status da Conexão ao Neon
+// -----------------------------------------------------------------------------
+app.get('/api/health', async (req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  if (sql) {
+    try {
+      const start = Date.now();
+      await sql`SELECT 1 as ping;`;
+      const latency = Date.now() - start;
+      dbStatus = `connected (latency: ${latency}ms)`;
+    } catch (err: any) {
+      dbStatus = `error: ${err?.message || 'Falha ao conectar'}`;
+    }
+  }
+
+  res.json({
+    status: 'ok',
+    neonDatabase: dbStatus,
+    timestamp: new Date().toISOString(),
   });
+});
+
+// -----------------------------------------------------------------------------
+// Inicialização do Servidor (Vite Dev Server em desenvolvimento ou estáticos em prod)
+// -----------------------------------------------------------------------------
+async function startServer() {
+  // Inicializa tabelas no Neon se DATABASE_URL estiver configurada
+  if (sql) {
+    initNeonDatabase().catch((e) => console.warn('[Neon] Aviso na inicialização automática do banco:', e));
+  }
 
   if (!isProd) {
     const vite = await createViteServer({
-      server: { 
-        middlewareMode: true, 
-        host: '0.0.0.0', 
+      server: {
+        middlewareMode: true,
+        host: '0.0.0.0',
         port: PORT,
         allowedHosts: true,
       },
@@ -114,14 +1078,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
+    app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.resolve(__dirname, 'dist/index.html'));
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] BioSaaS listening on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] BioSaaS rodando em http://0.0.0.0:${PORT}`);
   });
 }
+
+// Export para uso serverless na Vercel (api/index.ts)
+export default app;
+export { app, sql };
 
 startServer();
