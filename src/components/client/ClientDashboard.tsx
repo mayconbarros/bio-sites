@@ -43,6 +43,7 @@ import {
   MessageCircle, 
   CheckCircle2, 
   AlertCircle, 
+  Save,
   X, 
   Download,
   Calendar as CalendarIcon,
@@ -207,6 +208,7 @@ export const ClientDashboard: React.FC = () => {
     switchUserRole,
     changePassword,
     creatorProfile,
+    isInitialStateLoaded,
   } = useApp();
 
   const isClientRole = currentUser?.role === 'client';
@@ -586,24 +588,29 @@ export const ClientDashboard: React.FC = () => {
   });
 
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
+  const lastLoadedSiteIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (activeBiosite) {
-      setAppearanceForm({
-        logoShape: ((activeBiosite as any).logoShape || 'circle') as 'circle' | 'square',
-        logoTransparent: (activeBiosite as any).logoTransparent || false,
-        title: activeBiosite.title || '',
-        subtitle: activeBiosite.subtitle || '',
-        description: activeBiosite.description || '',
-        primaryColor: activeBiosite.themeConfig.primaryColor || '#2563EB',
-        primaryTextColor: activeBiosite.themeConfig.primaryTextColor || '#FFFFFF',
-        fontFamily: activeBiosite.themeConfig.fontFamily || 'Space Grotesk, sans-serif',
-        coverUrl: activeBiosite.coverUrl || 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=1200&auto=format&fit=crop&q=80',
-        videoUrl: (activeBiosite as any).videoUrl || '',
-        avatarUrl: activeBiosite.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80',
-      });
+      const siteKey = `${activeBiosite.id}_${isInitialStateLoaded}`;
+      if (lastLoadedSiteIdRef.current !== siteKey) {
+        lastLoadedSiteIdRef.current = siteKey;
+        setAppearanceForm({
+          logoShape: ((activeBiosite as any).logoShape || 'circle') as 'circle' | 'square',
+          logoTransparent: (activeBiosite as any).logoTransparent || false,
+          title: activeBiosite.title || '',
+          subtitle: activeBiosite.subtitle || '',
+          description: activeBiosite.description || '',
+          primaryColor: activeBiosite.themeConfig?.primaryColor || '#2563EB',
+          primaryTextColor: activeBiosite.themeConfig?.primaryTextColor || '#FFFFFF',
+          fontFamily: activeBiosite.themeConfig?.fontFamily || 'Space Grotesk, sans-serif',
+          coverUrl: activeBiosite.coverUrl || 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=1200&auto=format&fit=crop&q=80',
+          videoUrl: (activeBiosite as any).videoUrl || '',
+          avatarUrl: activeBiosite.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80',
+        });
+      }
     }
-  }, [activeBiosite?.id, activeBiosite?.updatedAt, activeBiosite?.title, activeBiosite?.avatarUrl, activeBiosite?.coverUrl, activeBiosite?.themeConfig?.primaryColor]);
+  }, [activeBiosite?.id, isInitialStateLoaded]);
 
   const FONT_OPTIONS = [
     { id: 'Space Grotesk, sans-serif', name: 'Padrão (Space Grotesk)' },
@@ -617,8 +624,7 @@ export const ClientDashboard: React.FC = () => {
   const handleSaveAppearance = async () => {
     if (!activeBiosite) return;
 
-    const updatedSite = {
-      ...activeBiosite,
+    const updatedSite: Partial<Biosite> = {
       title: appearanceForm.title,
       subtitle: appearanceForm.subtitle,
       description: appearanceForm.description,
@@ -640,7 +646,7 @@ export const ClientDashboard: React.FC = () => {
       showToast('Salvando aparência no banco Neon...');
       await updateBiosite(activeBiosite.id, updatedSite);
       confetti({ particleCount: 50, spread: 60, origin: { y: 0.3 } });
-      showToast('Alterações de aparência salvas com sucesso para todos os dispositivos!', 'success');
+      showToast('Alterações de aparência salvas com sucesso no banco Neon!', 'success');
     } catch {
       showToast('Erro ao salvar aparência no banco de dados', 'error');
     }
@@ -928,20 +934,26 @@ export const ClientDashboard: React.FC = () => {
     enabled: activeBiosite?.locationConfig?.enabled ?? !!activeBiosite?.locationConfig?.address,
   });
 
-  useEffect(() => {
-    if (activeBiosite?.locationConfig) {
-      setAddressForm({
-        address: activeBiosite.locationConfig.address || '',
-        buttonText: activeBiosite.locationConfig.buttonText || 'Como chegar',
-        cardBgColor: activeBiosite.locationConfig.cardBgColor || '#ffffff',
-        cardTextColor: activeBiosite.locationConfig.cardTextColor || '#171717',
-        buttonBgColor: activeBiosite.locationConfig.buttonBgColor || '#10b981',
-        buttonTextColor: activeBiosite.locationConfig.buttonTextColor || '#ffffff',
-        enabled: activeBiosite.locationConfig.enabled ?? !!activeBiosite.locationConfig.address,
-      });
-    }
+  const lastLoadedButtonsSiteIdRef = React.useRef<string | null>(null);
 
-    if (activeBiosite) {
+  useEffect(() => {
+    if (!activeBiosite) return;
+    const siteKey = `${activeBiosite.id}_${isInitialStateLoaded}`;
+    if (lastLoadedButtonsSiteIdRef.current !== siteKey) {
+      lastLoadedButtonsSiteIdRef.current = siteKey;
+
+      if (activeBiosite.locationConfig) {
+        setAddressForm({
+          address: activeBiosite.locationConfig.address || '',
+          buttonText: activeBiosite.locationConfig.buttonText || 'Como chegar',
+          cardBgColor: activeBiosite.locationConfig.cardBgColor || '#ffffff',
+          cardTextColor: activeBiosite.locationConfig.cardTextColor || '#171717',
+          buttonBgColor: activeBiosite.locationConfig.buttonBgColor || '#10b981',
+          buttonTextColor: activeBiosite.locationConfig.buttonTextColor || '#ffffff',
+          enabled: activeBiosite.locationConfig.enabled ?? !!activeBiosite.locationConfig.address,
+        });
+      }
+
       setButtonsList(resolveContactButtonsList(activeBiosite));
 
       if (activeBiosite.pixConfig) {
@@ -967,7 +979,7 @@ export const ClientDashboard: React.FC = () => {
         });
       }
     }
-  }, [activeBiosite?.id, activeBiosite?.updatedAt, activeBiosite?.contactButtons, activeBiosite?.locationConfig]);
+  }, [activeBiosite?.id, isInitialStateLoaded]);
 
   const handleSaveAddress = async () => {
     if (!activeBiosite) return;
@@ -1293,29 +1305,40 @@ export const ClientDashboard: React.FC = () => {
     setHasUnsavedButtonChanges(true);
   };
 
-  const moveButton = (indexOrId: number | string, direction: 'up' | 'down') => {
-    setButtonsList(prev => {
-      const index = typeof indexOrId === 'number' 
-        ? indexOrId 
-        : prev.findIndex(b => b.id === indexOrId || (b as any).type === indexOrId || (b.label && b.label.toLowerCase() === String(indexOrId).toLowerCase()));
-      if (index < 0 || index >= prev.length) return prev;
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
-      const nextList = [...prev];
-      const [movedItem] = nextList.splice(index, 1);
-      nextList.splice(targetIndex, 0, movedItem);
+  const moveButton = async (indexOrId: number | string, direction: 'up' | 'down') => {
+    if (!activeBiosite) return;
+    const index = typeof indexOrId === 'number' 
+      ? indexOrId 
+      : buttonsList.findIndex(b => b.id === indexOrId || (b as any).type === indexOrId || (b.label && b.label.toLowerCase() === String(indexOrId).toLowerCase()));
+    if (index < 0 || index >= buttonsList.length) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= buttonsList.length) return;
 
-      // Auto-persist immediately to biosite in Neon / storage so published site reflects instantly
-      if (activeBiosite) {
-        updateBiosite(activeBiosite.id, { 
-          contactButtons: nextList,
-        }).catch(err => console.warn('Erro ao auto-salvar ordem dos botões:', err));
-      }
-      return nextList;
-    });
-    setHasUnsavedButtonChanges(true);
-    showToast('Posição do botão alterada e salva no mini-site!', 'success');
+    const nextList = [...buttonsList];
+    const [movedItem] = nextList.splice(index, 1);
+    nextList.splice(targetIndex, 0, movedItem);
+
+    // Update local UI immediately
+    setButtonsList(nextList);
+    setHasUnsavedButtonChanges(false);
+
+    // Persist immediately to Neon database via updateBiosite
+    try {
+      showToast('Salvando nova ordem dos botões no banco Neon...');
+      await updateBiosite(activeBiosite.id, { 
+        contactButtons: nextList,
+      });
+      showToast('Ordem dos botões salva com sucesso no banco!', 'success');
+      setFloatingToast('Ordem dos botões salva!');
+      setTimeout(() => setFloatingToast(null), 2500);
+    } catch (err) {
+      console.error('Erro ao salvar ordem dos botões no Neon:', err);
+      showToast('Erro ao salvar ordem dos botões no banco Neon', 'error');
+    }
   };
+
+  const moveUp = (indexOrId: number | string) => moveButton(indexOrId, 'up');
+  const moveDown = (indexOrId: number | string) => moveButton(indexOrId, 'down');
 
   const handleSaveButtons = async () => {
     if (!activeBiosite) return;
@@ -1459,15 +1482,53 @@ export const ClientDashboard: React.FC = () => {
         description: appearanceForm.description,
         avatarUrl: appearanceForm.avatarUrl,
         coverUrl: appearanceForm.coverUrl,
+        videoUrl: appearanceForm.videoUrl,
+        logoShape: appearanceForm.logoShape,
+        logoTransparent: appearanceForm.logoTransparent,
         themeConfig: {
           ...activeBiosite.themeConfig,
           primaryColor: appearanceForm.primaryColor,
           primaryTextColor: appearanceForm.primaryTextColor,
           fontFamily: appearanceForm.fontFamily,
         },
+        pixConfig: {
+          ...activeBiosite.pixConfig,
+          keyType: (pixForm.keyType || 'cnpj') as any,
+          pixKey: pixForm.pixKey,
+          instantPix: pixForm.instantPix,
+          hasCardBg: pixForm.hasCardBg,
+          cardTextColor: pixForm.cardTextColor,
+          buttonBgColor: pixForm.buttonBgColor,
+          buttonTextColor: pixForm.buttonTextColor,
+          enabled: !!pixForm.pixKey,
+        },
+        wifiConfig: {
+          ...activeBiosite.wifiConfig,
+          networkName: wifiForm.networkName,
+          password: wifiForm.password,
+          hasCardBg: wifiForm.hasCardBg,
+          cardTextColor: wifiForm.cardTextColor,
+          buttonBgColor: wifiForm.buttonBgColor,
+          buttonTextColor: wifiForm.buttonTextColor,
+          enabled: !!wifiForm.networkName,
+        },
+        locationConfig: {
+          ...activeBiosite.locationConfig,
+          address: addressForm.address.trim(),
+          buttonText: addressForm.buttonText.trim() || 'Como chegar',
+          cardBgColor: addressForm.cardBgColor,
+          cardTextColor: addressForm.cardTextColor,
+          buttonBgColor: addressForm.buttonBgColor,
+          buttonTextColor: addressForm.buttonTextColor,
+          googleMapsUrl: addressForm.address.trim()
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressForm.address.trim())}`
+            : '',
+          enabled: !!addressForm.address.trim(),
+        },
       });
+      setHasUnsavedButtonChanges(false);
     }
-    showToast('Mini-site publicado com sucesso na MB Web Digital!', 'success');
+    showToast('Mini-site republicado e salvo no banco de dados Neon!', 'success');
   };
 
   const handleSaveManualAppointment = (e: React.FormEvent) => {
@@ -1873,6 +1934,16 @@ export const ClientDashboard: React.FC = () => {
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Ver Publicado</span>
           </a>
+
+          {/* Salvar Tudo Button */}
+          <button
+            onClick={handlePublish}
+            className="px-3.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+            title="Salvar todas as alterações (textos, cores, botões) no banco Neon"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Salvar Tudo</span>
+          </button>
 
           {/* Republicar Button (Lime neon matching screenshots) */}
           <button

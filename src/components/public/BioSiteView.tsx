@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Biosite, Service } from '../../types';
+import { Biosite, Service, ContactButton } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { BookingModal } from './BookingModal';
 import { CatalogCarousel } from './CatalogCarousel';

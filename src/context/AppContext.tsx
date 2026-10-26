@@ -118,6 +118,7 @@ interface AppContextType {
   activeBiosite: Biosite | undefined;
   clientActiveTab: string;
   setClientActiveTab: (tab: string) => void;
+  isInitialStateLoaded: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1017,6 +1018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeBiosite,
         clientActiveTab,
         setClientActiveTab,
+        isInitialStateLoaded,
       }}
     >
       {children}

@@ -21,7 +21,9 @@ import {
   Copy,
   Check,
   Sparkles,
-  Users
+  Users,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface BioSiteEditorProps {
@@ -62,6 +64,17 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
     const updated = { ...formData, [field]: value };
     setFormData(updated);
     updateBiosite(biosite.id, { [field]: value });
+  };
+
+  const moveButton = (idx: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= formData.contactButtons.length) return;
+    const nextButtons = [...formData.contactButtons];
+    const [moved] = nextButtons.splice(idx, 1);
+    nextButtons.splice(targetIdx, 0, moved);
+    setFormData(prev => ({ ...prev, contactButtons: nextButtons }));
+    updateBiosite(biosite.id, { contactButtons: nextButtons });
+    showToast('Ordem dos botões alterada e salva no banco Neon!');
   };
 
   const handleThemePresetSelect = (preset: ThemeConfig) => {
@@ -161,6 +174,23 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
           </button>
 
           {/* Switch to public bio site view */}
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                showToast('Salvando alterações no banco Neon...');
+                await updateBiosite(biosite.id, formData);
+                showToast('Mini-site salvo com sucesso no banco Neon!', 'success');
+              } catch {
+                showToast('Erro ao salvar no banco Neon', 'error');
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Salvar
+          </button>
+
           <a
             href={`/${biosite.slug}`}
             target="_blank"
@@ -507,12 +537,38 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
                       className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-3"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5 bg-neutral-800 p-0.5 rounded-lg border border-neutral-700">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveButton(idx, 'up')}
+                              className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                                idx === 0 ? 'opacity-25 cursor-not-allowed text-neutral-500' : 'text-neutral-300 hover:bg-neutral-700 cursor-pointer'
+                              }`}
+                              title={idx === 0 ? undefined : "Subir posição"}
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === formData.contactButtons.length - 1}
+                              onClick={() => moveButton(idx, 'down')}
+                              className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                                idx === formData.contactButtons.length - 1 ? 'opacity-25 cursor-not-allowed text-neutral-500' : 'text-neutral-300 hover:bg-neutral-700 cursor-pointer'
+                              }`}
+                              title={idx === formData.contactButtons.length - 1 ? undefined : "Descer posição"}
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+                          </div>
+                          <span className="w-5 h-5 rounded-full bg-neutral-800 text-neutral-300 flex items-center justify-center text-[10px] font-bold">
                             {idx + 1}
                           </span>
-                          {btn.label}
-                        </span>
+                          <span className="text-xs font-bold text-white">
+                            {btn.label}
+                          </span>
+                        </div>
                         <label className="flex items-center gap-2 cursor-pointer text-xs">
                           <input
                             type="checkbox"

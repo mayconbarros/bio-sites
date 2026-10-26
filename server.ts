@@ -914,7 +914,6 @@ app.get('/api/biosites', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     console.warn('[Neon] Erro ao listar biosites:', err?.message);
-    sqlActive = false;
   }
   const data = readLocalData();
   return res.json(data.biosites || []);
@@ -936,7 +935,6 @@ app.get('/api/biosites/:idOrSlug', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     console.warn(`[Neon] Erro ao buscar biosite ${idOrSlug}:`, err?.message);
-    sqlActive = false;
   }
   const data = readLocalData();
   const found = (data.biosites || []).find((b: any) => 
@@ -998,11 +996,9 @@ app.put('/api/biosites/:id', async (req: Request, res: Response) => {
           savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
         }
         await upsertBiositeToDb(savedSite);
+        console.log(`[Neon] Bio Site "${savedSite.title || id}" atualizado com sucesso no banco.`);
       } catch (err: any) {
         console.warn(`[Neon] Erro no update do biosite ${id}:`, err?.message);
-        if (err?.message?.includes('connect') || err?.message?.includes('socket') || err?.code === 'ECONNREFUSED') {
-          sqlActive = false;
-        }
       }
     }
     if (!savedSite) {
@@ -1183,7 +1179,6 @@ app.get('/api/state', async (req: Request, res: Response) => {
     }
   } catch (e: any) {
     console.warn('[Neon] Erro ao ler estado unificado no Neon:', e?.message);
-    sqlActive = false;
   }
 
   const local = readLocalData();
@@ -1272,7 +1267,6 @@ app.post('/api/state', async (req: Request, res: Response) => {
         }
       } catch (err: any) {
         console.warn('[Neon] Erro ao sincronizar estado com Neon, salvando local:', err?.message);
-        sqlActive = false;
       }
     }
 
