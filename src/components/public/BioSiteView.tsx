@@ -76,7 +76,7 @@ function generatePixPayload(key: string, name: string, city: string, amount?: nu
 interface BioSiteViewProps {
   biosite: Biosite;
   isMockupFrame?: boolean;
-  onMoveButton?: (index: number, direction: 'up' | 'down') => void;
+  onMoveButton?: (indexOrId: number | string, direction: 'up' | 'down') => void;
 }
 
 export const BioSiteView: React.FC<BioSiteViewProps> = ({ 
@@ -403,18 +403,81 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
     }
   };
 
-  // Unified buttons list: always includes special buttons (booking, pix, wifi) if enabled/configured
+  // Unified buttons list: strictly preserves user-defined ordering of ALL buttons (including Booking, Pix, WiFi)
   const effectiveButtons = React.useMemo(() => {
-    // Keep user's custom buttons, but isolate pix and wifi buttons so their presence strictly reflects whether their config fields are filled
-    const baseList = (biosite.contactButtons || []).filter(b => 
-      b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' &&
-      b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi'
-    );
-    const hasBooking = baseList.some(b => b.type === 'Agendar' || b.id === 'btn-booking' || (b as any).isSpecial === 'booking' || (b.label && b.label.toLowerCase().includes('agendar')));
+    const rawButtons = biosite.contactButtons || [];
+    const hasPixKey = Boolean(biosite.pixConfig?.pixKey && biosite.pixConfig.pixKey.trim() !== '');
+    const hasWifiName = Boolean(biosite.wifiConfig?.networkName && biosite.wifiConfig.networkName.trim() !== '');
 
-    const list = [...baseList];
+    let foundBooking = false;
+    let foundPix = false;
+    let foundWifi = false;
 
-    if (!hasBooking) {
+    const list: ContactButton[] = [];
+
+    for (const b of rawButtons) {
+      const isBooking = b.type === 'Agendar' || b.id === 'btn-booking' || b.id === 'btn-agendar' || (b as any).isSpecial === 'booking' || (b.label && b.label.toLowerCase().includes('agendar'));
+      const isPix = b.id === 'btn-pix' || b.type === 'Pix' || (b as any).isSpecial === 'pix';
+      const isWifi = b.id === 'btn-wifi' || b.type === 'WiFi' || (b as any).isSpecial === 'wifi';
+
+      if (isBooking) {
+        foundBooking = true;
+        list.push({
+          ...b,
+          type: 'Agendar',
+          isSpecial: 'booking',
+          url: b.url || '#agendar',
+          label: b.label || 'Agendar',
+          icon: b.icon || 'Calendar',
+          lucideIcon: b.lucideIcon || 'Calendar',
+        });
+        continue;
+      }
+
+      if (isPix) {
+        foundPix = true;
+        // Only include if Pix key is actually configured
+        if (hasPixKey) {
+          list.push({
+            ...b,
+            id: 'btn-pix',
+            type: 'Pix',
+            isSpecial: 'pix',
+            url: '#pix',
+            label: b.label || 'Chave Pix',
+            icon: b.icon || 'QrCode',
+            lucideIcon: b.lucideIcon || 'QrCode',
+            bgColor: b.bgColor && b.bgColor !== 'padrão' ? b.bgColor : (biosite.pixConfig?.buttonBgColor || 'padrão'),
+            textColor: b.textColor && b.textColor !== 'padrão' ? b.textColor : (biosite.pixConfig?.buttonTextColor || 'padrão'),
+          });
+        }
+        continue;
+      }
+
+      if (isWifi) {
+        foundWifi = true;
+        // Only include if WiFi name is configured
+        if (hasWifiName) {
+          list.push({
+            ...b,
+            id: 'btn-wifi',
+            type: 'WiFi',
+            isSpecial: 'wifi',
+            url: '#wifi',
+            label: b.label || 'WIFI',
+            icon: b.icon || 'Wifi',
+            lucideIcon: b.lucideIcon || 'Wifi',
+            bgColor: b.bgColor && b.bgColor !== 'padrão' ? b.bgColor : (biosite.wifiConfig?.buttonBgColor || 'padrão'),
+            textColor: b.textColor && b.textColor !== 'padrão' ? b.textColor : (biosite.wifiConfig?.buttonTextColor || 'padrão'),
+          });
+        }
+        continue;
+      }
+
+      list.push(b);
+    }
+
+    if (!foundBooking) {
       list.push({
         id: 'btn-booking',
         label: 'Agendar',
@@ -432,8 +495,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
       });
     }
 
-    const hasPixKey = Boolean(biosite.pixConfig?.pixKey && biosite.pixConfig.pixKey.trim() !== '');
-    if (hasPixKey) {
+    if (hasPixKey && !foundPix) {
       list.push({
         id: 'btn-pix',
         label: 'Chave Pix',
@@ -451,8 +513,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
       });
     }
 
-    const hasWifiName = Boolean(biosite.wifiConfig?.networkName && biosite.wifiConfig.networkName.trim() !== '');
-    if (hasWifiName) {
+    if (hasWifiName && !foundWifi) {
       list.push({
         id: 'btn-wifi',
         label: 'WIFI',
@@ -693,7 +754,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          if (!isFirst) onMoveButton(index, 'up');
+                          if (!isFirst) onMoveButton(btn.id, 'up');
                         }}
                         className={`w-5 h-5 rounded flex items-center justify-center transition ${
                           isFirst 
@@ -710,7 +771,7 @@ export const BioSiteView: React.FC<BioSiteViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           e.preventDefault();
-                          if (!isLast) onMoveButton(index, 'down');
+                          if (!isLast) onMoveButton(btn.id, 'down');
                         }}
                         className={`w-5 h-5 rounded flex items-center justify-center transition ${
                           isLast 

@@ -633,6 +633,7 @@ export const ClientDashboard: React.FC = () => {
       logoShape: appearanceForm.logoShape,
       logoTransparent: appearanceForm.logoTransparent,
       videoUrl: appearanceForm.videoUrl,
+      contactButtons: buttonsList,
     };
 
     try {
@@ -754,29 +755,84 @@ export const ClientDashboard: React.FC = () => {
     { id: 'custom', label: 'Botão personalizado', icon: 'Sparkles', defaultUrl: 'https://', type: 'Botão personalizado' },
   ];
 
-  // Buttons state matching screenshots
-  const [buttonsList, setButtonsList] = useState<any[]>(() => {
-    const rawButtons = activeBiosite?.contactButtons || [];
-    const existing = rawButtons
-      .filter(b => b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' && b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi')
-      .map(b => ({
+  // Unified button list resolver: strictly preserves user-defined order for ALL buttons
+  const resolveContactButtonsList = (biosite?: Biosite) => {
+    if (!biosite) return [];
+    const rawButtons = biosite.contactButtons || [];
+    const list: any[] = [];
+
+    let hasBooking = false;
+    let hasPix = false;
+    let hasWifi = false;
+
+    for (const b of rawButtons) {
+      const isBooking = b.id === 'btn-booking' || b.id === 'btn-agendar' || b.type === 'Agendar' || (b as any).isSpecial === 'booking' || b.label?.toLowerCase().includes('agendar');
+      const isPix = b.id === 'btn-pix' || b.type === 'Pix' || (b as any).isSpecial === 'pix';
+      const isWifi = b.id === 'btn-wifi' || b.type === 'WiFi' || (b as any).isSpecial === 'wifi';
+
+      if (isBooking) {
+        hasBooking = true;
+        list.push({
+          ...b,
+          type: 'Agendar',
+          isSpecial: 'booking',
+          url: b.url || '#agendar',
+          displayMode: b.displayMode || 'full_button',
+          pulseEffect: b.pulseEffect || false,
+          bgColor: b.bgColor || 'padrão',
+          textColor: b.textColor || 'padrão',
+        });
+        continue;
+      }
+
+      if (isPix) {
+        hasPix = true;
+        list.push({
+          ...b,
+          id: 'btn-pix',
+          type: 'Pix',
+          isSpecial: 'pix',
+          url: '#pix',
+          displayMode: b.displayMode || 'full_button',
+          pulseEffect: b.pulseEffect || false,
+          bgColor: b.bgColor || biosite.pixConfig?.buttonBgColor || 'padrão',
+          textColor: b.textColor || biosite.pixConfig?.buttonTextColor || 'padrão',
+        });
+        continue;
+      }
+
+      if (isWifi) {
+        hasWifi = true;
+        list.push({
+          ...b,
+          id: 'btn-wifi',
+          type: 'WiFi',
+          isSpecial: 'wifi',
+          url: '#wifi',
+          displayMode: b.displayMode || 'full_button',
+          pulseEffect: b.pulseEffect || false,
+          bgColor: b.bgColor || biosite.wifiConfig?.buttonBgColor || 'padrão',
+          textColor: b.textColor || biosite.wifiConfig?.buttonTextColor || 'padrão',
+        });
+        continue;
+      }
+
+      list.push({
         ...b,
         type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
-        displayMode: 'full_button',
+        displayMode: b.displayMode || 'full_button',
         pulseEffect: b.pulseEffect || false,
         bgColor: b.bgColor || 'padrão',
         textColor: b.textColor || 'padrão',
-      }));
+      });
+    }
 
-    const hasBooking = existing.some(b => b.id === 'btn-booking' || b.type === 'Agendar' || (b as any).isSpecial === 'booking');
-
-    const fullList = [...existing];
     if (!hasBooking) {
-      fullList.unshift({
-        id: 'btn-booking',
-        label: 'Agendar Horário Online',
-        icon: 'Sparkles',
-        lucideIcon: 'Sparkles',
+      list.push({
+        id: 'btn-agendar',
+        label: 'Agendar',
+        icon: 'Calendar',
+        lucideIcon: 'Calendar',
         url: '#agendar',
         isWhatsApp: false,
         type: 'Agendar',
@@ -784,11 +840,55 @@ export const ClientDashboard: React.FC = () => {
         active: true,
         displayMode: 'full_button',
         pulseEffect: false,
-        bgColor: 'padrão',
-        textColor: 'padrão',
+        bgColor: '#ff2a85',
+        textColor: '#ffffff',
       });
     }
-    return fullList;
+
+    const hasPixKey = Boolean(biosite.pixConfig?.pixKey && biosite.pixConfig.pixKey.trim() !== '');
+    if (hasPixKey && !hasPix) {
+      list.push({
+        id: 'btn-pix',
+        label: 'Chave Pix',
+        icon: 'QrCode',
+        lucideIcon: 'QrCode',
+        url: '#pix',
+        isWhatsApp: false,
+        active: true,
+        type: 'Pix',
+        isSpecial: 'pix',
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: biosite.pixConfig?.buttonBgColor || 'padrão',
+        textColor: biosite.pixConfig?.buttonTextColor || 'padrão',
+      });
+    }
+
+    const hasWifiName = Boolean(biosite.wifiConfig?.networkName && biosite.wifiConfig.networkName.trim() !== '');
+    if (hasWifiName && !hasWifi) {
+      list.push({
+        id: 'btn-wifi',
+        label: 'WIFI',
+        icon: 'Wifi',
+        lucideIcon: 'Wifi',
+        url: '#wifi',
+        isWhatsApp: false,
+        active: true,
+        type: 'WiFi',
+        isSpecial: 'wifi',
+        displayMode: 'full_button',
+        pulseEffect: false,
+        bgColor: biosite.wifiConfig?.buttonBgColor || 'padrão',
+        textColor: biosite.wifiConfig?.buttonTextColor || 'padrão',
+      });
+    }
+
+    return list;
+  };
+
+  // Buttons state initialized with all buttons preserving exact ordering
+  const [buttonsList, setButtonsList] = useState<any[]>(() => {
+    return resolveContactButtonsList(activeBiosite);
   });
 
   const [expandedButtonIds, setExpandedButtonIds] = useState<string[]>([]);
@@ -842,38 +942,7 @@ export const ClientDashboard: React.FC = () => {
     }
 
     if (activeBiosite) {
-      const rawButtons = activeBiosite.contactButtons || [];
-      const existing = rawButtons
-        .filter(b => b.id !== 'btn-pix' && b.type !== 'Pix' && (b as any).isSpecial !== 'pix' && b.id !== 'btn-wifi' && b.type !== 'WiFi' && (b as any).isSpecial !== 'wifi')
-        .map(b => ({
-          ...b,
-          type: b.type || (b.isWhatsApp ? 'WhatsApp' : b.label?.includes('Instagram') ? 'Instagram' : b.label),
-          displayMode: 'full_button',
-          pulseEffect: b.pulseEffect || false,
-          bgColor: b.bgColor || 'padrão',
-          textColor: b.textColor || 'padrão',
-        }));
-
-      const hasBooking = existing.some(b => b.id === 'btn-booking' || b.type === 'Agendar' || (b as any).isSpecial === 'booking');
-      const fullList = [...existing];
-      if (!hasBooking) {
-        fullList.unshift({
-          id: 'btn-booking',
-          label: 'Agendar Horário Online',
-          icon: 'Sparkles',
-          lucideIcon: 'Sparkles',
-          url: '#agendar',
-          isWhatsApp: false,
-          type: 'Agendar',
-          isSpecial: 'booking',
-          active: true,
-          displayMode: 'full_button',
-          pulseEffect: false,
-          bgColor: 'padrão',
-          textColor: 'padrão',
-        });
-      }
-      setButtonsList(fullList);
+      setButtonsList(resolveContactButtonsList(activeBiosite));
 
       if (activeBiosite.pixConfig) {
         setPixForm({
@@ -1228,16 +1297,24 @@ export const ClientDashboard: React.FC = () => {
     setButtonsList(prev => {
       const index = typeof indexOrId === 'number' 
         ? indexOrId 
-        : prev.findIndex(b => b.id === indexOrId);
+        : prev.findIndex(b => b.id === indexOrId || (b as any).type === indexOrId || (b.label && b.label.toLowerCase() === String(indexOrId).toLowerCase()));
       if (index < 0 || index >= prev.length) return prev;
       const targetIndex = direction === 'up' ? index - 1 : index + 1;
       if (targetIndex < 0 || targetIndex >= prev.length) return prev;
       const nextList = [...prev];
       const [movedItem] = nextList.splice(index, 1);
       nextList.splice(targetIndex, 0, movedItem);
+
+      // Auto-persist immediately to biosite in Neon / storage so published site reflects instantly
+      if (activeBiosite) {
+        updateBiosite(activeBiosite.id, { 
+          contactButtons: nextList,
+        }).catch(err => console.warn('Erro ao auto-salvar ordem dos botões:', err));
+      }
       return nextList;
     });
     setHasUnsavedButtonChanges(true);
+    showToast('Posição do botão alterada e salva no mini-site!', 'success');
   };
 
   const handleSaveButtons = async () => {
@@ -1367,14 +1444,28 @@ export const ClientDashboard: React.FC = () => {
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     confetti({
       particleCount: 80,
       spread: 70,
       origin: { y: 0.2 }
     });
     if (activeBiosite) {
-      updateBiosite(activeBiosite.id, { status: 'active' });
+      await updateBiosite(activeBiosite.id, { 
+        status: 'active',
+        contactButtons: buttonsList,
+        title: appearanceForm.title,
+        subtitle: appearanceForm.subtitle,
+        description: appearanceForm.description,
+        avatarUrl: appearanceForm.avatarUrl,
+        coverUrl: appearanceForm.coverUrl,
+        themeConfig: {
+          ...activeBiosite.themeConfig,
+          primaryColor: appearanceForm.primaryColor,
+          primaryTextColor: appearanceForm.primaryTextColor,
+          fontFamily: appearanceForm.fontFamily,
+        },
+      });
     }
     showToast('Mini-site publicado com sucesso na MB Web Digital!', 'success');
   };
@@ -1754,6 +1845,9 @@ export const ClientDashboard: React.FC = () => {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
+              if (activeBiosite) {
+                updateBiosite(activeBiosite.id, { contactButtons: buttonsList }).catch(() => {});
+              }
               if (e.metaKey || e.ctrlKey || e.button === 1) return;
               try {
                 const url = `/${activeBiosite.slug}`;
@@ -3100,8 +3194,10 @@ export const ClientDashboard: React.FC = () => {
                     {/* Buttons List / Accordions (Print 3, 4, 5, 6) */}
                     {buttonsList.length > 0 && (
                       <div className="space-y-3">
-                        {buttonsList.map(btn => {
+                        {buttonsList.map((btn, index) => {
                           const isExpanded = expandedButtonIds.includes(btn.id);
+                          const isFirst = index === 0;
+                          const isLast = index === buttonsList.length - 1;
                           return (
                             <div 
                               key={btn.id} 
@@ -3110,7 +3206,31 @@ export const ClientDashboard: React.FC = () => {
                               {/* Header */}
                               <div className="p-3.5 flex items-center justify-between gap-2.5 bg-white">
                                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                  <GripVertical className="w-4 h-4 text-neutral-400 cursor-grab shrink-0" />
+                                  {/* Reorder Buttons in Editor List */}
+                                  <div className="flex items-center gap-0.5 shrink-0 bg-neutral-100 p-0.5 rounded-lg border border-neutral-200">
+                                    <button
+                                      type="button"
+                                      disabled={isFirst}
+                                      onClick={() => moveButton(btn.id, 'up')}
+                                      className={`w-6 h-6 rounded flex items-center justify-center transition ${
+                                        isFirst ? 'opacity-25 cursor-not-allowed text-neutral-400' : 'text-neutral-700 hover:bg-white hover:shadow-xs cursor-pointer'
+                                      }`}
+                                      title={isFirst ? undefined : "Subir posição"}
+                                    >
+                                      <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isLast}
+                                      onClick={() => moveButton(btn.id, 'down')}
+                                      className={`w-6 h-6 rounded flex items-center justify-center transition ${
+                                        isLast ? 'opacity-25 cursor-not-allowed text-neutral-400' : 'text-neutral-700 hover:bg-white hover:shadow-xs cursor-pointer'
+                                      }`}
+                                      title={isLast ? undefined : "Descer posição"}
+                                    >
+                                      <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    </button>
+                                  </div>
                                   
                                   {/* Active toggle */}
                                   <CustomToggle
@@ -3131,6 +3251,7 @@ export const ClientDashboard: React.FC = () => {
                                     type="button"
                                     onClick={() => handleToggleExpandButton(btn.id)}
                                     className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
+                                    title={isExpanded ? "Recolher detalhes" : "Editar detalhes"}
                                   >
                                     {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                   </button>
@@ -3138,6 +3259,7 @@ export const ClientDashboard: React.FC = () => {
                                     type="button"
                                     onClick={() => handleDeleteButton(btn.id)}
                                     className="p-1 rounded-md text-neutral-400 hover:text-red-500 transition cursor-pointer"
+                                    title="Remover botão"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
