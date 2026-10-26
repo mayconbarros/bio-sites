@@ -1,3 +1,226 @@
 {
-  "biosites": []
+  "biosites": [
+    {
+      "id": "bio-bella-nails",
+      "agencyId": "agency-1",
+      "clientUserId": "user-maria",
+      "clientName": "Maria Eduarda (Studio Bella Nails)",
+      "clientEmail": "maria@bellanails.com.br",
+      "clientPhone": "(11) 99123-4567",
+      "slug": "esmalteriavip",
+      "title": "Mayrah - Esmalteria Vip (Neon PostgreSQL)",
+      "subtitle": "NAIL DESIGNER & SPA DOS PÉS",
+      "description": "Especialista em Alongamento em Fibra de Vidro, Esmaltação em Gel e Cuidado Pessoal. Agende seu horário online em segundos!",
+      "category": "manicure",
+      "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&auto=format&fit=crop&q=80",
+      "logoShape": "circle",
+      "logoTransparent": false,
+      "coverType": "image",
+      "coverUrl": "https://images.unsplash.com/photo-1604654894610-df63bc536371?w=1200&auto=format&fit=crop&q=80",
+      "videoUrl": "",
+      "coverGradient": "",
+      "instagramHandle": "@esmalteriavip",
+      "themeConfig": {
+        "presetId": "clean-white",
+        "presetName": "Clean White (Padrão)",
+        "bgColor": "#ffffff",
+        "bgGradient": "#ffffff",
+        "cardBg": "#ffffff",
+        "primaryColor": "#ff2a85",
+        "primaryTextColor": "#ffffff",
+        "accentColor": "#f43f5e",
+        "textColor": "#171717",
+        "textMutedColor": "#6b7280",
+        "buttonStyle": "rounded",
+        "glassmorphism": false,
+        "fontFamily": "Space Grotesk, sans-serif"
+      },
+      "contactButtons": [
+        {
+          "id": "btn-insta",
+          "label": "Instagram",
+          "icon": "instagram",
+          "lucideIcon": "Instagram",
+          "url": "https://www.instagram.com/esmalteriavip/",
+          "isWhatsApp": false,
+          "active": true,
+          "type": "Instagram",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#ff2a85",
+          "textColor": "#ffffff"
+        },
+        {
+          "id": "btn-wpp",
+          "label": "WhatsApp",
+          "icon": "whatsapp",
+          "lucideIcon": "MessageCircle",
+          "url": "https://wa.me/5598991506106",
+          "isWhatsApp": true,
+          "phone": "+55 (98) 99150-6106",
+          "prefilledMessage": "Olá, vim do seu Bio Site e gostaria de agendar um horário",
+          "active": true,
+          "type": "WhatsApp",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#ff2a85",
+          "textColor": "#ffffff"
+        },
+        {
+          "id": "btn-google",
+          "label": "Avaliar no Google",
+          "icon": "Star",
+          "lucideIcon": "Star",
+          "url": "https://g.page/r/review",
+          "isWhatsApp": false,
+          "active": true,
+          "type": "Avaliar no Google",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#2563eb",
+          "textColor": "#ffffff"
+        },
+        {
+          "id": "btn-agendar",
+          "label": "Agendar",
+          "icon": "Calendar",
+          "lucideIcon": "Calendar",
+          "url": "#agendar",
+          "isWhatsApp": false,
+          "active": true,
+          "type": "Agendar",
+          "isSpecial": "booking",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#ff2a85",
+          "textColor": "#ffffff"
+        },
+        {
+          "id": "btn-pix",
+          "label": "Chave Pix",
+          "icon": "QrCode",
+          "lucideIcon": "QrCode",
+          "url": "#pix",
+          "isWhatsApp": false,
+          "active": true,
+          "type": "Pix",
+          "isSpecial": "pix",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#ff2a85",
+          "textColor": "#ffffff"
+        },
+        {
+          "id": "btn-wifi",
+          "label": "WIFI",
+          "icon": "Wifi",
+          "lucideIcon": "Wifi",
+          "url": "#wifi",
+          "isWhatsApp": false,
+          "active": true,
+          "type": "WiFi",
+          "isSpecial": "wifi",
+          "displayMode": "full_button",
+          "pulseEffect": false,
+          "bgColor": "#ff2a85",
+          "textColor": "#ffffff"
+        }
+      ],
+      "pixConfig": {
+        "enabled": false,
+        "keyType": "cnpj",
+        "pixKey": "12.345.678/0001-95",
+        "beneficiaryName": "Mayrah Esmalteria Vip",
+        "city": "São Luís - MA",
+        "hasCardBg": false,
+        "cardTextColor": "padrão",
+        "buttonBgColor": "padrão",
+        "buttonTextColor": "padrão",
+        "instantPix": false
+      },
+      "wifiConfig": {
+        "enabled": false,
+        "networkName": "Studio_BellaNails_Clientes",
+        "password": "senha123",
+        "hasCardBg": false,
+        "cardTextColor": "padrão",
+        "buttonBgColor": "padrão",
+        "buttonTextColor": "padrão"
+      },
+      "locationConfig": {
+        "enabled": true,
+        "address": "Rua das Camélias, 342 - Sala 03, Moema, São Paulo - SP",
+        "cityState": "São Paulo - SP",
+        "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Rua+das+Cam%C3%A9lias%2C+342+-+Sala+03%2C+Moema%2C+S%C3%A3o+Paulo+-+SP",
+        "wazeUrl": "https://waze.com/ul?q=Moema+Sao+Paulo",
+        "buttonText": "Como chegar",
+        "buttonBgColor": "#10b981",
+        "buttonTextColor": "#ffffff",
+        "cardBgColor": "#ffffff",
+        "cardTextColor": "#171717"
+      },
+      "businessHours": [],
+      "footerBranding": {
+        "enabled": true,
+        "agencyName": "MB Web Digital",
+        "agencyTagline": "Crie um Bio Site profissional para o seu negócio",
+        "agencyUrl": "https://mbwebdigital.com.br"
+      },
+      "catalogs": [
+        {
+          "id": "cat-servicos",
+          "title": "Nossos serviços",
+          "itemCount": 1,
+          "active": true,
+          "isExpanded": true,
+          "items": [
+            {
+              "id": "item-fibra-vidro",
+              "title": "Alongamento em Fibra de Vidro",
+              "description": "Agende agora clicando no botão abaixo",
+              "imageUrl": "https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=800&auto=format&fit=crop&q=80",
+              "url": "#agendar",
+              "buttonText": "Acessar",
+              "buttonAlign": "left",
+              "aspectRatio": "16:9",
+              "type": "image",
+              "fit": "cover",
+              "active": true
+            }
+          ]
+        },
+        {
+          "id": "cat-trabalho",
+          "title": "Conheça mais do nosso trabalho",
+          "itemCount": 1,
+          "active": true,
+          "isExpanded": true,
+          "items": [
+            {
+              "id": "item-trabalho-1",
+              "title": "",
+              "description": "",
+              "imageUrl": "https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800&auto=format&fit=crop&q=80",
+              "url": "",
+              "buttonText": "",
+              "buttonAlign": "left",
+              "aspectRatio": "16:9",
+              "type": "image",
+              "fit": "cover",
+              "active": true
+            }
+          ]
+        }
+      ],
+      "catalogSettings": {
+        "autoplay": true,
+        "interval": 5
+      },
+      "status": "published",
+      "createdAt": "2026-10-25T15:56:45.550Z",
+      "updatedAt": "2026-10-26T11:18:03.859Z"
+    }
+  ],
+  "services": [],
+  "appointments": []
 }

@@ -189,7 +189,7 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
             title={`Abrir ${biosite.title} (${biosite.slug})`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Abrir Bio Site
+            Ver Publicado
           </a>
         </div>
       </header>

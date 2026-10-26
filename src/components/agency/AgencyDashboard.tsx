@@ -7,7 +7,8 @@ import {
   Eye, 
   Clipboard, 
   Trash2, 
-  Plus
+  Plus,
+  ExternalLink
 } from 'lucide-react';
 import emptyStateIllustration from '../../assets/images/empty_state_illustration_1791938807425.jpg';
 import { EMPTY_STATE_ILLUSTRATION_BASE64 } from '../../assets/images/emptyStateIllustrationBase64';
@@ -194,6 +195,18 @@ export const AgencyDashboard: React.FC = () => {
                       className="flex-1 py-2.5 px-4 rounded-xl bg-[#a3e635] hover:bg-[#84cc16] text-neutral-950 text-xs font-bold transition flex items-center justify-center cursor-pointer shadow-xs active:scale-[0.99]"
                     >
                       Editar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveBiositeId(site.id);
+                        setCurrentView('public');
+                      }}
+                      className="w-10 h-10 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 flex items-center justify-center transition cursor-pointer shrink-0"
+                      title="Ver mini-site publicado"
+                    >
+                      <ExternalLink className="w-4 h-4" />
                     </button>
 
                     <button

@@ -13,7 +13,7 @@ import { LoginPage } from './components/auth/LoginPage';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 function AppContent() {
-  const { currentView, activeBiosite, toast } = useApp();
+  const { currentView, setCurrentView, activeBiosite, toast, isAuthenticated } = useApp();
 
   if (currentView === 'login') {
     return (
@@ -70,17 +70,57 @@ function AppContent() {
       >
         {currentView === 'agency' && <AgencyDashboard />}
         {currentView === 'client' && <ClientDashboard />}
-        {currentView === 'public' && activeBiosite && (
-          <div 
-            className="w-full min-h-screen flex justify-center selection:bg-pink-500 selection:text-white"
-            style={{
-              background: activeBiosite.themeConfig.bgGradient || activeBiosite.themeConfig.bgColor || '#ffffff',
-            }}
-          >
-            <div className="w-full max-w-lg min-h-screen">
-              <BioSiteView biosite={activeBiosite} />
+        {currentView === 'public' && (
+          activeBiosite ? (
+            <div 
+              className="w-full min-h-screen flex flex-col items-center selection:bg-pink-500 selection:text-white"
+              style={{
+                background: activeBiosite.themeConfig.bgGradient || activeBiosite.themeConfig.bgColor || '#ffffff',
+              }}
+            >
+              {isAuthenticated && (
+                <div className="w-full max-w-lg bg-neutral-900/95 text-white text-xs py-2 px-4 flex items-center justify-between sticky top-0 z-50 backdrop-blur-md shadow-md border-b border-neutral-800">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="font-semibold text-neutral-200 truncate max-w-[160px] sm:max-w-[220px]">
+                      {activeBiosite.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentView('client')}
+                      className="px-2.5 py-1 bg-[#bef264] hover:bg-[#aee625] text-neutral-900 font-bold rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
+                      title="Voltar para o painel de edição do mini-site"
+                    >
+                      Editar Mini-site
+                    </button>
+                    <button
+                      onClick={() => setCurrentView('agency')}
+                      className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition text-[11px] cursor-pointer"
+                      title="Voltar para a lista de todos os mini-sites"
+                    >
+                      Meus Sites
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="w-full max-w-lg min-h-screen">
+                <BioSiteView biosite={activeBiosite} />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-neutral-50 text-neutral-900 text-center">
+              <div className="w-10 h-10 border-4 border-[#bef264] border-t-transparent rounded-full animate-spin mb-4" />
+              <h2 className="text-base font-bold text-neutral-800">Carregando mini-site...</h2>
+              <p className="text-xs text-neutral-500 mt-1 max-w-xs">Buscando informações salvas no banco Neon.</p>
+              <button
+                onClick={() => setCurrentView('agency')}
+                className="mt-4 px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 transition cursor-pointer"
+              >
+                Voltar aos Mini-sites
+              </button>
+            </div>
+          )
         )}
       </div>
 

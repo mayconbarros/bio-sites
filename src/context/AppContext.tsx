@@ -125,7 +125,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Inicialização com estado base; dados completos são sincronizados da API Neon em seguida
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
-    let rawList: Biosite[] = (persistedState as any)?.biosites || INITIAL_BIOSITES;
+    let rawList: Biosite[] = (persistedState as any)?.biosites;
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      rawList = INITIAL_BIOSITES;
+    }
     return rawList.map(b => {
       let existing = b.contactButtons || [];
       const hasAgendar = existing.some(btn => btn.label?.toLowerCase() === 'agendar' || btn.type === 'Agendar' || btn.id === 'btn-agendar');
@@ -191,6 +194,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           siteId: match.id
         };
       }
+      // If a candidate slug is in the URL, the user is requesting to view this public biosite
+      return {
+        view: 'public',
+        siteId: candidate
+      };
     }
 
     const isAuth = localStorage.getItem('biosaas_is_authenticated') === 'true';
@@ -326,6 +334,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Carrega o estado global diretamente da API do servidor/Neon ao iniciar
   useEffect(() => {
     let isMounted = true;
+
+    // Se a URL contiver um slug público direto (ex: /esmalteriavip ou /minha-barbearia), busca imediatamente
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+|\/+$/g, '') : '';
+    const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const siteQuery = searchParams?.get('site');
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#\/?/, '') : '';
+    const candidateSlug = siteQuery || hash || (currentPath && currentPath !== 'agency' && currentPath !== 'client' && currentPath !== 'login' && currentPath !== 'index.html' ? currentPath : null);
+
+    if (candidateSlug) {
+      fetch(`/api/biosites/${encodeURIComponent(candidateSlug)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(site => {
+          if (isMounted && site && site.id) {
+            setBiosites(prev => {
+              const exists = prev.some(b => b.id === site.id);
+              return exists ? prev.map(b => b.id === site.id ? { ...b, ...site } : b) : [site, ...prev];
+            });
+            setActiveBiositeId(site.id);
+            setCurrentView('public');
+          }
+        })
+        .catch(() => {});
+    }
+
     fetch('/api/state')
       .then(res => res.ok ? res.json() : null)
       .then(serverState => {
@@ -343,6 +375,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             locationConfig: b.locationConfig || { enabled: false },
           }));
           setBiosites(sanitized);
+
+          // Reavalia rota com a lista completa do banco Neon
+          if (candidateSlug) {
+            const found = sanitized.find((s: any) => 
+              s && (s.slug?.toLowerCase() === candidateSlug.toLowerCase() || s.id?.toLowerCase() === candidateSlug.toLowerCase())
+            );
+            if (found) {
+              setActiveBiositeId(found.id);
+              setCurrentView('public');
+            }
+          } else if (currentPath.startsWith('painel')) {
+            const panelSlug = currentPath.split('/')[1];
+            const found = sanitized.find((s: any) => 
+              s && (s.slug?.toLowerCase() === panelSlug?.toLowerCase() || s.id?.toLowerCase() === panelSlug?.toLowerCase())
+            );
+            if (found) {
+              setActiveBiositeId(found.id);
+              setCurrentView('client');
+            }
+          }
         }
         if (serverState.clients && Array.isArray(serverState.clients) && serverState.clients.length > 0) {
           setClients(serverState.clients);
@@ -459,29 +511,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBiosite = (data: Partial<Biosite>): Biosite => {
     const id = `bio-${Date.now()}`;
+    const cleanSlug = (data.slug || `site-${Date.now()}`)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+
     const newSite: Biosite = {
       ...INITIAL_BIOSITES[0],
       id,
       title: data.title || 'Novo Estabelecimento',
       subtitle: data.subtitle || 'Serviços Especializados',
-      slug: data.slug || `site-${Date.now()}`,
+      category: data.category || 'manicure',
       clientName: data.clientName || 'Proprietário',
       clientEmail: data.clientEmail || 'contato@cliente.com',
       clientPhone: data.clientPhone || '(11) 99999-0000',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...data,
+      slug: cleanSlug,
     };
 
     setBiosites(prev => [newSite, ...prev]);
     setActiveBiositeId(newSite.id);
+
+    // Starter services for the new biosite
+    const starterServices: Service[] = newSite.category === 'barbearia' ? [
+      { id: `srv-${Date.now()}-1`, biositeId: id, name: 'Corte Degradê & Freestyle', price: 45, durationMinutes: 35, category: 'Cabelo', orderIndex: 0, active: true, images: ['https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80'], description: 'Corte moderno com navalha e acabamento impecável.' },
+      { id: `srv-${Date.now()}-2`, biositeId: id, name: 'Barba Terapia com Toalha Quente', price: 40, durationMinutes: 30, category: 'Barba', orderIndex: 1, active: true, images: [], description: 'Alinhamento com produtos premium e massagem facial.' },
+      { id: `srv-${Date.now()}-3`, biositeId: id, name: 'Combo Completo (Corte + Barba)', price: 75, promotionalPrice: 70, durationMinutes: 60, category: 'Combos', orderIndex: 2, active: true, images: [], description: 'O melhor pacote para renovar o visual por completo.' }
+    ] : [
+      { id: `srv-${Date.now()}-1`, biositeId: id, name: 'Alongamento em Fibra de Vidro', price: 130, promotionalPrice: 110, durationMinutes: 90, category: 'Alongamento', orderIndex: 0, active: true, images: ['https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=800&auto=format&fit=crop&q=80'], description: 'Unhas elegantes, resistentes e com curvatura natural.' },
+      { id: `srv-${Date.now()}-2`, biositeId: id, name: 'Esmaltação em Gel', price: 60, durationMinutes: 45, category: 'Esmaltação', orderIndex: 1, active: true, images: [], description: 'Brilho espelhado e durabilidade de até 20 dias.' },
+      { id: `srv-${Date.now()}-3`, biositeId: id, name: 'Spa dos Pés Completo', price: 50, durationMinutes: 40, category: 'Spa', orderIndex: 2, active: true, images: [], description: 'Higienização profunda, esfoliação e hidratação.' }
+    ];
+
+    setServices(prev => [...prev, ...starterServices]);
+
     fetch('/api/biosites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSite),
     })
-      .then(() => showToast(`Bio Site "${newSite.title}" criado e salvo no banco!`))
+      .then(() => {
+        showToast(`Bio Site "${newSite.title}" criado e salvo no banco!`);
+        starterServices.forEach(srv => {
+          fetch('/api/services', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(srv),
+          }).catch(() => {});
+        });
+      })
       .catch(e => console.warn('[addBiosite] Erro ao salvar:', e));
+
     return newSite;
   };
 
@@ -701,12 +786,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
-  const activeBiosite = (biosites || []).find(s => s && s.id === activeBiositeId) || biosites?.[0];
+  const activeBiosite = (biosites || []).find(s => 
+    s && (s.id === activeBiositeId || s.slug?.toLowerCase() === activeBiositeId?.toLowerCase())
+  ) || biosites?.[0];
 
   const navigateView = (view: AppView) => {
     setCurrentView(view);
     if (typeof window !== 'undefined') {
-      const activeSite = (biosites || []).find(s => s && s.id === activeBiositeId) || biosites?.[0];
+      const activeSite = (biosites || []).find(s => 
+        s && (s.id === activeBiositeId || s.slug?.toLowerCase() === activeBiositeId?.toLowerCase())
+      ) || biosites?.[0];
+
       if (view === 'login') {
         if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
           window.history.pushState({}, '', '/');

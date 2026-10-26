@@ -149,7 +149,14 @@ function writeLocalData(data: any): void {
   try {
     const dir = path.dirname(DATA_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    
+    // Safety check: do not wipe existing biosites if incoming data has empty biosites
+    const existing = readLocalData();
+    const merged = { ...existing, ...data };
+    if ((!data.biosites || data.biosites.length === 0) && existing.biosites && existing.biosites.length > 0) {
+      merged.biosites = existing.biosites;
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(merged, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[Storage Local] Erro ao gravar persisted_state.json:', err);
   }
@@ -523,7 +530,15 @@ async function upsertBiositeToDb(b: any) {
   const clientName = b.clientName || '';
   const clientEmail = b.clientEmail || '';
   const clientPhone = b.clientPhone || '';
-  const slug = b.slug || `site-${Date.now()}`;
+  let slug = (b.slug || `site-${Date.now()}`).toLowerCase().trim();
+
+  // Guarantee slug uniqueness across different IDs in Neon
+  try {
+    const existingWithSlug = await sql`SELECT id FROM biosites WHERE LOWER(slug) = LOWER(${slug}) AND id != ${id} LIMIT 1;`;
+    if (existingWithSlug.length > 0) {
+      slug = `${slug}-${Math.floor(Math.random() * 899 + 100)}`;
+    }
+  } catch {}
   const title = b.title || 'Meu Bio Site';
   const subtitle = b.subtitle || '';
   const description = b.description || '';
@@ -954,7 +969,9 @@ app.post('/api/biosites', async (req: Request, res: Response) => {
         console.log(`[Neon] Bio Site "${biosite.title}" inserido no banco com sucesso.`);
       } catch (err: any) {
         console.warn('[Neon] Erro ao inserir biosite:', err?.message);
-        sqlActive = false;
+        if (err?.message?.includes('connect') || err?.message?.includes('socket') || err?.code === 'ECONNREFUSED') {
+          sqlActive = false;
+        }
       }
     }
 
@@ -984,7 +1001,9 @@ app.put('/api/biosites/:id', async (req: Request, res: Response) => {
         await upsertBiositeToDb(savedSite);
       } catch (err: any) {
         console.warn(`[Neon] Erro no update do biosite ${id}:`, err?.message);
-        sqlActive = false;
+        if (err?.message?.includes('connect') || err?.message?.includes('socket') || err?.code === 'ECONNREFUSED') {
+          sqlActive = false;
+        }
       }
     }
     if (!savedSite) {

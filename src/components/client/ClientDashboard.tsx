@@ -187,6 +187,8 @@ export const ClientDashboard: React.FC = () => {
   const { 
     biosites,
     activeBiosite, 
+    activeBiositeId,
+    setActiveBiositeId,
     updateBiosite,
     appointments, 
     services, 
@@ -1746,7 +1748,7 @@ export const ClientDashboard: React.FC = () => {
             <span>QR Code</span>
           </button>
 
-          {/* Abrir Button */}
+          {/* Ver Publicado Button */}
           <a
             href={`/${activeBiosite.slug}`}
             target="_blank"
@@ -1755,6 +1757,7 @@ export const ClientDashboard: React.FC = () => {
               if (e.metaKey || e.ctrlKey || e.button === 1) return;
               try {
                 const url = `/${activeBiosite.slug}`;
+                setActiveBiositeId(activeBiosite.id);
                 const win = window.open(url, '_blank');
                 if (!win) {
                   e.preventDefault();
@@ -1765,6 +1768,7 @@ export const ClientDashboard: React.FC = () => {
                 }
               } catch {
                 e.preventDefault();
+                setActiveBiositeId(activeBiosite.id);
                 window.history.pushState({}, '', `/${activeBiosite.slug}`);
                 setCurrentView('public');
               }
@@ -1773,7 +1777,7 @@ export const ClientDashboard: React.FC = () => {
             title={`Abrir mini-site em tempo real (${activeBiosite.slug})`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Abrir</span>
+            <span>Ver Publicado</span>
           </a>
 
           {/* Republicar Button (Lime neon matching screenshots) */}
