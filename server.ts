@@ -175,7 +175,7 @@ const isPlaceholderDb = !envDbUrl ||
 const databaseUrl = (!isPlaceholderDb && envDbUrl) ? envDbUrl : PRIMARY_NEON_DATABASE_URL;
 
 const sql = databaseUrl ? neon(databaseUrl) : null;
-let sqlActive = false;
+let sqlActive = true;
 
 if (databaseUrl) {
   console.log('[Neon] DATABASE_URL detectada! Testando conexão com banco Neon...');
