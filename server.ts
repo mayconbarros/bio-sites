@@ -2,7 +2,6 @@ import express, { type Request, type Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import { neon } from '@neondatabase/serverless';
 import { put } from '@vercel/blob';
@@ -1350,7 +1349,11 @@ async function startServer() {
   }
 
   if (!isProd) {
-    const vite = await createViteServer({
+    // TRUQUE NINJA: Variável dinâmica para esconder o Vite da Vercel
+    const viteTool = 'vite';
+    const { createServer } = await import(viteTool);
+
+    const vite = await createServer({
       server: {
         middlewareMode: true,
         host: '0.0.0.0',
@@ -1367,9 +1370,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] BioSaaS rodando em http://0.0.0.0:${PORT}`);
-  });
+  // Evita tentar abrir a porta 3000 dentro da Vercel (que já cuida disso sozinha)
+  if (!process.env.VERCEL) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Server] BioSaaS rodando em http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
 // Export para uso serverless na Vercel (api/index.ts)
