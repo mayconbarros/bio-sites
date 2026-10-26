@@ -2,7 +2,12 @@
  * Upload direto para a API do Cloudinary a partir do navegador (Client-side Direct Upload).
  * 
  * Ignora o servidor Node.js/server.ts para evitar estouros de payload (413 Payload Too Large)
- * ou limites de timeout (504 Gateway Timeout) na Vercel ao subir vídeos e imagens pesadas.
+ * ou limites de timeout (504 Gateway Timeout) na Vercel e plataformas serverless ao subir vídeos e imagens pesadas.
+ * 
+ * Regra:
+ * 1. O arquivo binário é enviado diretamente para o Cloudinary via FormData com upload_preset não assinado ('meus_videos').
+ * 2. O Cloudinary processa na CDN e devolve o campo `secure_url`.
+ * 3. O frontend recebe a URL final HTTPS definitiva e envia apenas essa string de texto ao backend/Neon.
  */
 
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/je065pkr/auto/upload';

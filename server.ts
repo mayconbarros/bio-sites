@@ -8,7 +8,7 @@ import { neon } from '@neondatabase/serverless';
 import { put } from '@vercel/blob';
 
 // Load environment variables (.env, .env.local, etc.)
-dotenv.config();
+dotenv.config({ override: true });
 
 // -----------------------------------------------------------------------------
 // Sanitização de Variáveis de Ambiente para Cloudinary
@@ -158,19 +158,23 @@ function writeLocalData(data: any): void {
 // -----------------------------------------------------------------------------
 // Neon PostgreSQL client initialization with Safe Fallback
 // -----------------------------------------------------------------------------
-const databaseUrl = process.env.DATABASE_URL;
-const isPlaceholderDb = !databaseUrl || 
-                        databaseUrl.includes('ep-xyz') || 
-                        databaseUrl.includes('<') || 
-                        databaseUrl.includes('user:password');
+const PRIMARY_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_sX75mqWcQdhr@ep-divine-fire-b4avnxz2-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
-const sql = (!isPlaceholderDb && databaseUrl) ? neon(databaseUrl) : null;
+const envDbUrl = process.env.DATABASE_URL;
+const isPlaceholderDb = !envDbUrl || 
+                        envDbUrl.includes('ep-xyz') || 
+                        envDbUrl.includes('<') || 
+                        envDbUrl.includes('user:password');
+
+const databaseUrl = (!isPlaceholderDb && envDbUrl) ? envDbUrl : PRIMARY_NEON_DATABASE_URL;
+
+const sql = databaseUrl ? neon(databaseUrl) : null;
 let sqlActive = false;
 
-if (databaseUrl && !isPlaceholderDb) {
+if (databaseUrl) {
   console.log('[Neon] DATABASE_URL detectada! Testando conexão com banco Neon...');
 } else {
-  console.log('[Neon] DATABASE_URL não configurada ou placeholder detectado. Operando com armazenamento local (persisted_state.json).');
+  console.log('[Neon] DATABASE_URL não configurada. Operando com armazenamento local (persisted_state.json).');
 }
 
 async function checkNeonConnection(): Promise<boolean> {
