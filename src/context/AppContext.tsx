@@ -88,7 +88,7 @@ interface AppContextType {
 
   updateAgencySettings: (settings: Partial<AgencySettings>) => void;
   addBiosite: (data: Partial<Biosite>) => Biosite;
-  updateBiosite: (id: string, data: Partial<Biosite>) => Promise<void>;
+  updateBiosite: (id: string, data: Partial<Biosite>) => Promise<Biosite | void>;
   deleteBiosite: (id: string) => Promise<void>;
   duplicateBiosite: (id: string) => void;
 
@@ -344,7 +344,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const candidateSlug = siteQuery || hash || (currentPath && currentPath !== 'agency' && currentPath !== 'client' && currentPath !== 'login' && currentPath !== 'index.html' ? currentPath : null);
 
     if (candidateSlug) {
-      fetch(`/api/biosites/${encodeURIComponent(candidateSlug)}`)
+      fetch(`/api/biosites/${encodeURIComponent(candidateSlug)}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      })
         .then(res => res.ok ? res.json() : null)
         .then(site => {
           if (isMounted && site && site.id) {
@@ -359,7 +362,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .catch(() => {});
     }
 
-    fetch('/api/state')
+    fetch(`/api/state?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    })
       .then(res => res.ok ? res.json() : null)
       .then(serverState => {
         if (!isMounted || !serverState) {
@@ -571,20 +577,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newSite;
   };
 
-  const updateBiosite = async (id: string, data: Partial<Biosite>): Promise<void> => {
+  const updateBiosite = async (id: string, data: Partial<Biosite>): Promise<Biosite> => {
+    const previousSites = [...biosites];
     const updatedPayload = { ...data, updatedAt: new Date().toISOString() };
+
+    // Atualização otimista
     setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...updatedPayload } : site));
+
     try {
       const res = await fetch(`/api/biosites/${encodeURIComponent(id)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
         body: JSON.stringify(updatedPayload),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        let errorMsg = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          if (errJson && errJson.error) errorMsg = errJson.error;
+        } catch {
+          try {
+            const errText = await res.text();
+            if (errText) errorMsg = errText.slice(0, 150);
+          } catch {}
+        }
+        if (res.status === 413) {
+          errorMsg = 'Imagens ou mídia muito pesadas (413 Payload Too Large). Por favor utilize imagens menores ou envie diretamente para o Cloudinary.';
+        }
+        throw new Error(errorMsg);
+      }
+
+      const resData = await res.json();
+      const savedBiosite: Biosite = resData?.biosite || { ...(biosites.find(b => b.id === id) || {}), ...updatedPayload };
+
+      // Atualiza com os dados sanitizados e confirmados pelo banco Neon
+      setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...savedBiosite } : site));
       showToast('Alterações salvas com sucesso no banco de dados!');
-    } catch (e) {
-      console.error('[updateBiosite] Erro ao salvar:', e);
-      showToast('Erro ao salvar alterações no banco Neon', 'error');
+      return savedBiosite;
+    } catch (e: any) {
+      console.error('[updateBiosite] Erro ao persistir no banco Neon:', e);
+      // Reverte o estado otimista para não induzir o usuário a erro
+      setBiosites(previousSites);
+      showToast(`Erro ao salvar no banco Neon: ${e?.message || 'Falha na conexão'}`, 'error');
+      // Re-lança para alertar componentes chamadores
+      throw e;
     }
   };
 

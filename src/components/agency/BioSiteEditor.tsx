@@ -66,15 +66,19 @@ export const BioSiteEditor: React.FC<BioSiteEditorProps> = ({ biosite, onBack })
     updateBiosite(biosite.id, { [field]: value });
   };
 
-  const moveButton = (idx: number, direction: 'up' | 'down') => {
+  const moveButton = async (idx: number, direction: 'up' | 'down') => {
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= formData.contactButtons.length) return;
     const nextButtons = [...formData.contactButtons];
     const [moved] = nextButtons.splice(idx, 1);
     nextButtons.splice(targetIdx, 0, moved);
     setFormData(prev => ({ ...prev, contactButtons: nextButtons }));
-    updateBiosite(biosite.id, { contactButtons: nextButtons });
-    showToast('Ordem dos botões alterada e salva no banco Neon!');
+    try {
+      await updateBiosite(biosite.id, { contactButtons: nextButtons });
+      showToast('Ordem dos botões alterada e salva no banco Neon!', 'success');
+    } catch (err: any) {
+      showToast(`Erro ao salvar ordem no banco Neon: ${err?.message || 'Falha'}`, 'error');
+    }
   };
 
   const handleThemePresetSelect = (preset: ThemeConfig) => {

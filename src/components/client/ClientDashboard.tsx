@@ -1468,12 +1468,9 @@ export const ClientDashboard: React.FC = () => {
   };
 
   const handlePublish = async () => {
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.2 }
-    });
-    if (activeBiosite) {
+    if (!activeBiosite) return;
+    try {
+      showToast('Salvando e publicando todas as configurações no banco Neon...');
       await updateBiosite(activeBiosite.id, { 
         status: 'active',
         contactButtons: buttonsList,
@@ -1527,8 +1524,16 @@ export const ClientDashboard: React.FC = () => {
         },
       });
       setHasUnsavedButtonChanges(false);
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.2 }
+      });
+      showToast('Mini-site republicado e salvo no banco de dados Neon!', 'success');
+    } catch (err: any) {
+      console.error('Erro ao republicar no banco Neon:', err);
+      showToast(`Falha ao salvar no banco Neon: ${err?.message || 'Erro na gravação'}`, 'error');
     }
-    showToast('Mini-site republicado e salvo no banco de dados Neon!', 'success');
   };
 
   const handleSaveManualAppointment = (e: React.FormEvent) => {

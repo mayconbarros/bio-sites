@@ -522,22 +522,38 @@ async function upsertClientToDb(client: any) {
 }
 
 async function upsertBiositeToDb(b: any) {
-  if (!sql) return;
+  if (!sql) {
+    throw new Error('Conexão Neon (DATABASE_URL) não inicializada.');
+  }
   const id = b.id || `bio-${Date.now()}`;
   const agencyId = b.agencyId || 'agency-1';
   const clientUserId = b.clientUserId || null;
   const clientName = b.clientName || '';
   const clientEmail = b.clientEmail || '';
   const clientPhone = b.clientPhone || '';
-  let slug = (b.slug || `site-${Date.now()}`).toLowerCase().trim();
 
-  // Guarantee slug uniqueness across different IDs in Neon
+  // Preserva slug original caso não venha no payload parcial
+  let slug = (b.slug || '').toLowerCase().trim();
+  if (!slug) {
+    try {
+      const existingSlugRow = await sql`SELECT slug FROM biosites WHERE id = ${id} LIMIT 1;`;
+      if (existingSlugRow.length > 0 && existingSlugRow[0].slug) {
+        slug = existingSlugRow[0].slug;
+      }
+    } catch {}
+  }
+  if (!slug) {
+    slug = `site-${Date.now()}`;
+  }
+
+  // Garante unicidade do slug se pertencer a outro ID
   try {
     const existingWithSlug = await sql`SELECT id FROM biosites WHERE LOWER(slug) = LOWER(${slug}) AND id != ${id} LIMIT 1;`;
     if (existingWithSlug.length > 0) {
       slug = `${slug}-${Math.floor(Math.random() * 899 + 100)}`;
     }
   } catch {}
+
   const title = b.title || 'Meu Bio Site';
   const subtitle = b.subtitle || '';
   const description = b.description || '';
@@ -568,7 +584,7 @@ async function upsertBiositeToDb(b: any) {
       logo_shape, logo_transparent, cover_type, cover_url, video_url, cover_gradient,
       instagram_handle, theme_config, contact_buttons, pix_config, wifi_config,
       location_config, business_hours, footer_branding, catalogs, catalog_settings,
-      status
+      status, updated_at
     )
     VALUES (
       ${id}, ${agencyId}, ${clientUserId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -576,7 +592,7 @@ async function upsertBiositeToDb(b: any) {
       ${logoShape}, ${logoTransparent}, ${coverType}, ${coverUrl}, ${videoUrl}, ${coverGradient},
       ${instagramHandle}, ${themeConfig}::jsonb, ${contactButtons}::jsonb, ${pixConfig}::jsonb, ${wifiConfig}::jsonb,
       ${locationConfig}::jsonb, ${businessHours}::jsonb, ${footerBranding}::jsonb, ${catalogs}::jsonb, ${catalogSettings}::jsonb,
-      ${status}
+      ${status}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       agency_id = EXCLUDED.agency_id,
@@ -650,12 +666,116 @@ async function upsertServiceToDb(s: any) {
 }
 
 // -----------------------------------------------------------------------------
+// Helper para Desativar Cache na Vercel e Navegadores (Cache-Control: no-store)
+// -----------------------------------------------------------------------------
+function setNoCacheHeaders(res: Response) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+}
+
+// -----------------------------------------------------------------------------
+// Helper para Converter Base64 em URL no Cloudinary (Evita estouro de 413 na Vercel)
+// -----------------------------------------------------------------------------
+async function uploadBase64ToCloudinary(base64Data: string, filename = 'media'): Promise<string> {
+  if (!base64Data || typeof base64Data !== 'string' || !base64Data.startsWith('data:')) {
+    return base64Data;
+  }
+  try {
+    let base64Content = base64Data;
+    let mimeType = 'image/jpeg';
+    let ext = 'jpg';
+
+    const match = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      mimeType = match[1];
+      base64Content = match[2];
+      ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
+    }
+
+    const buffer = Buffer.from(base64Content, 'base64');
+    const blob = new Blob([buffer], { type: mimeType });
+    const formData = new FormData();
+    formData.append('file', blob, `${filename}.${ext}`);
+    formData.append('upload_preset', 'meus_videos');
+
+    const res = await fetch('https://api.cloudinary.com/v1_1/je065pkr/auto/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data?.secure_url) {
+        console.log(`[Cloudinary Server] Upload de base64 convertido com sucesso para URL: ${data.secure_url}`);
+        return data.secure_url;
+      }
+    } else {
+      console.warn('[Cloudinary Server] Resposta não OK ao converter base64:', res.status);
+    }
+  } catch (err: any) {
+    console.warn('[Cloudinary Server] Falha ao converter base64 para Cloudinary:', err?.message);
+  }
+
+  return base64Data;
+}
+
+async function sanitizeBiositeMedia(b: any): Promise<any> {
+  if (!b) return b;
+  const sanitized = { ...b };
+  if (sanitized.avatarUrl && typeof sanitized.avatarUrl === 'string' && sanitized.avatarUrl.startsWith('data:')) {
+    sanitized.avatarUrl = await uploadBase64ToCloudinary(sanitized.avatarUrl, 'avatar');
+  }
+  if (sanitized.coverUrl && typeof sanitized.coverUrl === 'string' && sanitized.coverUrl.startsWith('data:')) {
+    sanitized.coverUrl = await uploadBase64ToCloudinary(sanitized.coverUrl, 'cover');
+  }
+  if (sanitized.videoUrl && typeof sanitized.videoUrl === 'string' && sanitized.videoUrl.startsWith('data:')) {
+    sanitized.videoUrl = await uploadBase64ToCloudinary(sanitized.videoUrl, 'video');
+  }
+  if (sanitized.catalogs && Array.isArray(sanitized.catalogs)) {
+    sanitized.catalogs = await Promise.all(sanitized.catalogs.map(async (cat: any) => {
+      if (cat.items && Array.isArray(cat.items)) {
+        const sanitizedItems = await Promise.all(cat.items.map(async (item: any) => {
+          if (item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('data:')) {
+            const url = await uploadBase64ToCloudinary(item.imageUrl, 'catalog_item');
+            return { ...item, imageUrl: url };
+          }
+          return item;
+        }));
+        return { ...cat, items: sanitizedItems };
+      }
+      return cat;
+    }));
+  }
+  return sanitized;
+}
+
+// -----------------------------------------------------------------------------
 // Criação do Aplicativo Express
 // -----------------------------------------------------------------------------
 const app = express();
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Middleware global para desativar cache em todas as rotas de API da Vercel
+app.use('/api', (req: Request, res: Response, next) => {
+  setNoCacheHeaders(res);
+  next();
+});
+
+// Middleware de captura de erro de tamanho (Payload Too Large 413)
+app.use((err: any, req: Request, res: Response, next: any) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    console.warn('[Express] 413 Payload Too Large detectado');
+    return res.status(413).json({ 
+      success: false, 
+      error: 'O arquivo ou imagem enviado excede o limite permitido (Payload Too Large). Por favor utilize imagens menores ou faça upload direto via Cloudinary.' 
+    });
+  }
+  next(err);
+});
 
 // Servir diretório estático de uploads
 app.use('/uploads', express.static(UPLOADS_DIR));
@@ -905,25 +1025,29 @@ app.delete('/api/clients/:id', async (req: Request, res: Response) => {
 // CRUD DE MINISITES / BIO SITES
 // -----------------------------------------------------------------------------
 
-// 1. Listar todos os biosites
+// 1. Listar todos os biosites (sem cache)
 app.get('/api/biosites', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   try {
-    if (sqlActive && sql) {
+    if (sql) {
       const rows = await sql`SELECT * FROM biosites ORDER BY created_at DESC;`;
-      return res.json(rows.map(dbRowToBiosite));
+      if (rows && rows.length > 0) {
+        return res.json(rows.map(dbRowToBiosite));
+      }
     }
   } catch (err: any) {
-    console.warn('[Neon] Erro ao listar biosites:', err?.message);
+    console.warn('[Neon] Erro ao listar biosites no Neon:', err?.message);
   }
   const data = readLocalData();
   return res.json(data.biosites || []);
 });
 
-// 2. Buscar biosite por ID ou Slug
+// 2. Buscar biosite por ID ou Slug (sem cache)
 app.get('/api/biosites/:idOrSlug', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   const { idOrSlug } = req.params;
   try {
-    if (sqlActive && sql) {
+    if (sql) {
       const rows = await sql`
         SELECT * FROM biosites 
         WHERE id = ${idOrSlug} OR LOWER(slug) = LOWER(${idOrSlug}) 
@@ -946,13 +1070,14 @@ app.get('/api/biosites/:idOrSlug', async (req: Request, res: Response) => {
 
 // 3. Criar novo biosite
 app.post('/api/biosites', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   try {
     const data = req.body;
     if (!data.title || !data.slug) {
       return res.status(400).json({ error: 'Título e slug são obrigatórios.' });
     }
 
-    const biosite = {
+    let biosite = {
       ...data,
       id: data.id || `bio-${Date.now()}`,
       status: data.status || 'active',
@@ -960,16 +1085,12 @@ app.post('/api/biosites', async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString(),
     };
 
-    if (sqlActive && sql) {
-      try {
-        await upsertBiositeToDb(biosite);
-        console.log(`[Neon] Bio Site "${biosite.title}" inserido no banco com sucesso.`);
-      } catch (err: any) {
-        console.warn('[Neon] Erro ao inserir biosite:', err?.message);
-        if (err?.message?.includes('connect') || err?.message?.includes('socket') || err?.code === 'ECONNREFUSED') {
-          sqlActive = false;
-        }
-      }
+    // Sanitiza mídias antes de salvar no Neon
+    biosite = await sanitizeBiositeMedia(biosite);
+
+    if (sql) {
+      await upsertBiositeToDb(biosite);
+      console.log(`[Neon] Bio Site "${biosite.title}" inserido e persistido no Neon com sucesso.`);
     }
 
     syncToLocalDisk({ biosite });
@@ -980,37 +1101,55 @@ app.post('/api/biosites', async (req: Request, res: Response) => {
   }
 });
 
-// 4. Atualizar biosite
+// 4. Atualizar biosite com garantia estrita de persistência no Neon (sem cache)
 app.put('/api/biosites/:id', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   const { id } = req.params;
+
   try {
     const data = req.body;
-    let savedSite: any = null;
-    if (sqlActive && sql) {
-      try {
-        const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
-        if (existing.length === 0) {
-          savedSite = { ...data, id, updatedAt: new Date().toISOString() };
-        } else {
-          const current = dbRowToBiosite(existing[0]);
-          savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
-        }
-        await upsertBiositeToDb(savedSite);
-        console.log(`[Neon] Bio Site "${savedSite.title || id}" atualizado com sucesso no banco.`);
-      } catch (err: any) {
-        console.warn(`[Neon] Erro no update do biosite ${id}:`, err?.message);
-      }
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ success: false, error: 'Dados inválidos para atualização do biosite.' });
     }
-    if (!savedSite) {
+
+    let savedSite: any = null;
+
+    if (sql) {
+      // 1. Busca biosite existente no Neon para mesclagem íntegra
+      const existing = await sql`SELECT * FROM biosites WHERE id = ${id} LIMIT 1;`;
+      if (existing.length === 0) {
+        const local = readLocalData();
+        const localMatch = (local.biosites || []).find((b: any) => b.id === id);
+        savedSite = { ...(localMatch || {}), ...data, id, updatedAt: new Date().toISOString() };
+      } else {
+        const current = dbRowToBiosite(existing[0]);
+        savedSite = { ...current, ...data, id, updatedAt: new Date().toISOString() };
+      }
+
+      // 2. Sanitiza imagens e vídeos (converte base64 para Cloudinary URLs para prevenir estouros de payload na Vercel)
+      savedSite = await sanitizeBiositeMedia(savedSite);
+
+      // 3. PERSISTÊNCIA ESTRITA NO BANCO NEON COM AWAIT
+      // Qualquer falha aqui é lançada para o bloco catch que devolverá status 500
+      await upsertBiositeToDb(savedSite);
+      console.log(`[Neon] Bio Site "${savedSite.title || id}" (slug: ${savedSite.slug}) persistido com sucesso no Neon.`);
+    } else {
       const local = readLocalData();
       const existing = (local.biosites || []).find((b: any) => b.id === id) || {};
       savedSite = { ...existing, ...data, id, updatedAt: new Date().toISOString() };
     }
+
+    // 4. Sincroniza em cache local apenas após confirmação do Neon
     syncToLocalDisk({ biosite: savedSite });
-    return res.json({ success: true, biosite: savedSite });
+
+    // 5. Devolve 200 para o frontend com garantia de persistência
+    return res.status(200).json({ success: true, biosite: savedSite });
   } catch (err: any) {
-    console.error(`Erro ao atualizar biosite ${id}:`, err);
-    return res.status(500).json({ error: err?.message || 'Erro ao atualizar biosite' });
+    console.error(`[Neon] ERRO CRÍTICO ao atualizar biosite ${id}:`, err);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Erro ao persistir alterações no banco de dados Neon: ${err?.message || 'Falha de gravação'}` 
+    });
   }
 });
 
@@ -1146,8 +1285,9 @@ app.delete('/api/services/:id', async (req: Request, res: Response) => {
 // ENDPOINTS DE SINCRONIZAÇÃO COMPLETA DE ESTADO (GET /api/state e POST /api/state)
 // -----------------------------------------------------------------------------
 app.get('/api/state', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   try {
-    if (sqlActive && sql) {
+    if (sql) {
       const [biositeRows, clientRows, serviceRows, profRows, apptRows, settingsRows] = await Promise.all([
         sql`SELECT * FROM biosites ORDER BY created_at DESC;`,
         sql`SELECT * FROM clients ORDER BY created_at DESC;`,
@@ -1165,7 +1305,7 @@ app.get('/api/state', async (req: Request, res: Response) => {
         if (row.key === 'agencySettings') agencySettings = row.value;
       }
 
-      if (biositeRows.length > 0) {
+      if (biositeRows && biositeRows.length > 0) {
         return res.json({
           biosites: biositeRows.map(dbRowToBiosite),
           clients: clientRows.map(dbRowToClient),
@@ -1186,14 +1326,18 @@ app.get('/api/state', async (req: Request, res: Response) => {
 });
 
 app.post('/api/state', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
   try {
     const data = req.body;
     if (!data) return res.json({ success: false });
 
-    if (sqlActive && sql) {
+    if (sql) {
       try {
         if (data.biosites && Array.isArray(data.biosites)) {
-          for (const b of data.biosites) await upsertBiositeToDb(b);
+          for (const b of data.biosites) {
+            const sanitized = await sanitizeBiositeMedia(b);
+            await upsertBiositeToDb(sanitized);
+          }
         }
         if (data.clients && Array.isArray(data.clients)) {
           for (const c of data.clients) await upsertClientToDb(c);
