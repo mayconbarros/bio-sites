@@ -1025,6 +1025,38 @@ app.delete('/api/clients/:id', async (req: Request, res: Response) => {
 // CRUD DE MINISITES / BIO SITES
 // -----------------------------------------------------------------------------
 
+// GET /api/check-slug?slug=meu-slug(&excludeId=id-opcional)
+app.get('/api/check-slug', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res);
+  const slug = String(req.query.slug || '').trim().toLowerCase();
+  const excludeId = req.query.excludeId ? String(req.query.excludeId) : null;
+
+  if (!slug) {
+    return res.status(400).json({ error: 'Parâmetro slug é obrigatório.', available: false });
+  }
+
+  try {
+    if (sql && sqlActive) {
+      const rows = excludeId
+        ? await sql`SELECT id FROM biosites WHERE LOWER(slug) = LOWER(${slug}) AND id != ${excludeId} LIMIT 1;`
+        : await sql`SELECT id FROM biosites WHERE LOWER(slug) = LOWER(${slug}) LIMIT 1;`;
+
+      return res.json({ available: rows.length === 0 });
+    }
+  } catch (err: any) {
+    console.warn('[Neon] Erro ao consultar slug no Neon, usando fallback local:', err?.message);
+    sqlActive = false;
+  }
+
+  // Fallback seguro caso o banco esteja indisponível ou em modo local
+  const data = readLocalData();
+  const exists = (data.biosites || []).some((b: any) => 
+    b.slug && b.slug.toLowerCase() === slug && (!excludeId || b.id !== excludeId)
+  );
+
+  return res.json({ available: !exists });
+});
+
 // 1. Listar todos os biosites (sem cache)
 app.get('/api/biosites', async (req: Request, res: Response) => {
   setNoCacheHeaders(res);

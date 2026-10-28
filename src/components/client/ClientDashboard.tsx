@@ -1700,7 +1700,7 @@ export const ClientDashboard: React.FC = () => {
       items: [
         { id: 'templates', label: 'Templates', icon: LayoutGrid },
         { id: 'aparencia', label: 'Aparência', icon: Palette },
-        { id: 'titulos', label: 'Títulos', icon: Type },
+        { id: 'titulos', label: 'URL e Acesso', icon: Type },
         { id: 'botoes', label: 'Botões', icon: MousePointerClick },
         { id: 'catalogo', label: 'Catálogo', icon: BookOpen },
         { id: 'endereco', label: 'Endereço', icon: MapPin },
