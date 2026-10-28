@@ -13,7 +13,7 @@ import { LoginPage } from './components/auth/LoginPage';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 function AppContent() {
-  const { currentView, setCurrentView, activeBiosite, toast, isAuthenticated } = useApp();
+  const { currentView, setCurrentView, activeBiosite, toast, isAuthenticated, isInitialStateLoaded } = useApp();
 
   if (currentView === 'login') {
     return (
@@ -108,17 +108,30 @@ function AppContent() {
                 <BioSiteView biosite={activeBiosite} />
               </div>
             </div>
-          ) : (
+          ) : !isInitialStateLoaded ? (
+            // TELA DE CARREGAMENTO (Aparece apenas enquanto busca no banco)
             <div className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-neutral-50 text-neutral-900 text-center">
               <div className="w-10 h-10 border-4 border-[#bef264] border-t-transparent rounded-full animate-spin mb-4" />
-              <h2 className="text-base font-bold text-neutral-800">Carregando mini-site...</h2>
-              <p className="text-xs text-neutral-500 mt-1 max-w-xs">Buscando informações salvas no banco Neon.</p>
-              <button
-                onClick={() => setCurrentView('agency')}
-                className="mt-4 px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 transition cursor-pointer"
-              >
-                Voltar aos Mini-sites
-              </button>
+              <h2 className="text-base font-bold text-neutral-800">Carregando...</h2>
+            </div>
+          ) : (
+            // TELA DE ERRO 404 (Aparece quando a URL tá errada e o carregamento terminou)
+            <div className="w-full min-h-screen flex flex-col items-center justify-center p-6 bg-neutral-50 text-neutral-900 text-center space-y-3 animate-in fade-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 rounded-full bg-neutral-200/60 flex items-center justify-center text-neutral-400 mb-2">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-black text-neutral-900 tracking-tight">Página não encontrada</h2>
+              <p className="text-sm text-neutral-500 max-w-xs font-medium leading-relaxed">
+                Não encontramos nenhum mini-site com este endereço. Verifique se o link foi digitado corretamente.
+              </p>
+              {isAuthenticated && (
+                <button
+                  onClick={() => setCurrentView('agency')}
+                  className="mt-6 px-6 py-2.5 bg-neutral-900 text-white rounded-xl text-xs font-bold hover:bg-neutral-800 transition cursor-pointer shadow-md"
+                >
+                  Voltar ao meu painel
+                </button>
+              )}
             </div>
           )
         )}
