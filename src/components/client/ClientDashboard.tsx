@@ -10,6 +10,7 @@ import { CustomToggle } from '../common/CustomToggle';
 import { ProfissionaisTab } from './ProfissionaisTab';
 import { AcessoClienteTab } from './AcessoClienteTab';
 import { LinksManagementPage } from '../links/LinksManagementPage';
+import { SlugSettingsField } from './SlugSettingsField';
 import confetti from 'canvas-confetti';
 import { 
   BarChart2, 
@@ -5270,8 +5271,28 @@ export const ClientDashboard: React.FC = () => {
             </div>
           )}
 
+      {/* TAB: URL E ACESSO (Antigo Títulos) */}
+          {selectedTab === 'titulos' && activeBiosite && (
+            <div className="max-w-5xl mx-auto flex justify-center animate-in fade-in duration-200 pt-4">
+              <SlugSettingsField 
+                currentSiteId={activeBiosite.id}
+                initialSlug={activeBiosite.slug}
+                onSave={async (newSlug) => {
+                  try {
+                    showToast('Atualizando URL do seu site...');
+                    // Essa linha salva direto no banco de dados Neon
+                    await updateBiosite(activeBiosite.id, { slug: newSlug });
+                    showToast('URL alterada com sucesso! Seu site já está no novo endereço.', 'success');
+                  } catch (err) {
+                    showToast('Erro ao atualizar URL no banco de dados.', 'error');
+                  }
+                }}
+              />
+            </div>
+          )}
+
           {/* EDITING TABS: Re-uses BioSiteEditor smoothly */}
-          {(['titulos', 'leads', 'layout', 'pix', 'cadastros'].includes(selectedTab)) && (
+          {(['leads', 'layout', 'pix', 'cadastros'].includes(selectedTab)) && (
             <div className="max-w-6xl mx-auto bg-white rounded-2xl border border-neutral-200 p-6 shadow-2xs animate-in fade-in duration-200">
               <BioSiteEditor 
                 biosite={activeBiosite} 
