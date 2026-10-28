@@ -124,7 +124,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Inicialização com estado base; dados completos são sincronizados da API Neon em seguida
   const [biosites, setBiosites] = useState<Biosite[]>(() => {
     let rawList: Biosite[] = (persistedState as any)?.biosites;
     if (!Array.isArray(rawList) || rawList.length === 0) {
@@ -157,7 +156,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   });
 
-  // Resolve initial route from URL (e.g. /esmalteriavip or /painel/esmalteriavip)
   const resolveRoute = (siteList: Biosite[]): { view: AppView; siteId: string } => {
     if (typeof window === 'undefined') {
       return { view: 'login', siteId: siteList[0]?.id || 'bio-bella-nails' };
@@ -179,7 +177,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const match = (siteList || []).find(s => s && (s.slug?.toLowerCase() === slug?.toLowerCase() || s.id?.toLowerCase() === slug?.toLowerCase()));
       return {
         view: 'client',
-        siteId: match ? match.id : (siteList?.[0]?.id || 'bio-bella-nails')
+        // CORREÇÃO: Removido o fallback que puxava o primeiro site. Agora, ou encontra ou fica vazio.
+        siteId: match ? match.id : (slug || '') 
       };
     }
 
@@ -195,7 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           siteId: match.id
         };
       }
-      // If a candidate slug is in the URL, the user is requesting to view this public biosite
+      // Se não achou, retorna o slug digitado pra forçar a página a dizer que não encontrou
       return {
         view: 'public',
         siteId: candidate
@@ -321,7 +320,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return (persistedState as any)?.agencySettings || INITIAL_AGENCY_SETTINGS;
   });
 
-  // Track events in memory/localStorage for analytics
   const [eventCounts, setEventCounts] = useState<Record<string, { views: number; clicks: number; bookings: number }>>(() => {
     const saved = localStorage.getItem('biosaas_events');
     return saved ? JSON.parse(saved) : {
@@ -332,11 +330,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [isInitialStateLoaded, setIsInitialStateLoaded] = useState(false);
 
-  // Carrega o estado global diretamente da API do servidor/Neon ao iniciar
   useEffect(() => {
     let isMounted = true;
-
-    // Se a URL contiver um slug público direto (ex: /esmalteriavip ou /minha-barbearia), busca imediatamente
     const currentPath = typeof window !== 'undefined' ? window.location.pathname.replace(/^\/+|\/+$/g, '') : '';
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const siteQuery = searchParams?.get('site');
@@ -383,7 +378,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
           setBiosites(sanitized);
 
-          // Reavalia rota com a lista completa do banco Neon
           if (candidateSlug) {
             const found = sanitized.find((s: any) => 
               s && (s.slug?.toLowerCase() === candidateSlug.toLowerCase() || s.id?.toLowerCase() === candidateSlug.toLowerCase())
@@ -391,6 +385,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (found) {
               setActiveBiositeId(found.id);
               setCurrentView('public');
+            } else {
+              setActiveBiositeId(candidateSlug);
             }
           } else if (currentPath.startsWith('painel')) {
             const panelSlug = currentPath.split('/')[1];
@@ -400,6 +396,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (found) {
               setActiveBiositeId(found.id);
               setCurrentView('client');
+            } else {
+              setActiveBiositeId(panelSlug);
             }
           }
         }
@@ -430,7 +428,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => { isMounted = false; };
   }, []);
 
-  // Salva no banco de dados via API em background apenas APÓS o carregamento inicial ter terminado
   useEffect(() => {
     if (!isInitialStateLoaded) return;
     const timer = setTimeout(() => {
@@ -451,7 +448,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [isInitialStateLoaded, biosites, clients, services, professionals, appointments, creatorProfile, agencySettings]);
 
-  // Hydrate stored cover videos from IndexedDB
   useEffect(() => {
     let isMounted = true;
     biosites.forEach(async (b) => {
@@ -467,7 +463,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => { isMounted = false; };
   }, []);
 
-  // Sync state across browser tabs in real-time and handle browser navigation
   useEffect(() => {
     const handlePopState = () => {
       const route = resolveRoute(biosites);
@@ -544,7 +539,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBiosites(prev => [newSite, ...prev]);
     setActiveBiositeId(newSite.id);
 
-    // Starter services for the new biosite
     const starterServices: Service[] = newSite.category === 'barbearia' ? [
       { id: `srv-${Date.now()}-1`, biositeId: id, name: 'Corte Degradê & Freestyle', price: 45, durationMinutes: 35, category: 'Cabelo', orderIndex: 0, active: true, images: ['https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&auto=format&fit=crop&q=80'], description: 'Corte moderno com navalha e acabamento impecável.' },
       { id: `srv-${Date.now()}-2`, biositeId: id, name: 'Barba Terapia com Toalha Quente', price: 40, durationMinutes: 30, category: 'Barba', orderIndex: 1, active: true, images: [], description: 'Alinhamento com produtos premium e massagem facial.' },
@@ -581,7 +575,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const previousSites = [...biosites];
     const updatedPayload = { ...data, updatedAt: new Date().toISOString() };
 
-    // Atualização otimista
     setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...updatedPayload } : site));
 
     try {
@@ -615,16 +608,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const resData = await res.json();
       const savedBiosite: Biosite = resData?.biosite || { ...(biosites.find(b => b.id === id) || {}), ...updatedPayload };
 
-      // Atualiza com os dados sanitizados e confirmados pelo banco Neon
       setBiosites(prev => prev.map(site => site.id === id ? { ...site, ...savedBiosite } : site));
       showToast('Alterações salvas com sucesso no banco de dados!');
       return savedBiosite;
     } catch (e: any) {
       console.error('[updateBiosite] Erro ao persistir no banco Neon:', e);
-      // Reverte o estado otimista para não induzir o usuário a erro
       setBiosites(previousSites);
       showToast(`Erro ao salvar no banco Neon: ${e?.message || 'Falha na conexão'}`, 'error');
-      // Re-lança para alertar componentes chamadores
       throw e;
     }
   };
@@ -661,7 +651,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    // Duplicate services
     const sourceServices = services.filter(s => s.biositeId === id);
     const newServices: Service[] = sourceServices.map(s => ({
       ...s,
@@ -738,7 +727,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setAppointments(prev => [newAppointment, ...prev]);
 
-    // Track in stats
     setEventCounts(prev => {
       const current = prev[data.biositeId] || { views: 0, clicks: 0, bookings: 0 };
       return {
@@ -805,7 +793,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    // Consolidated Agency Stats
     let totalViews = 0;
     let totalClicks = 0;
     Object.values(eventCounts).forEach(c => {
@@ -828,9 +815,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  // CORREÇÃO FINAL AQUI: Retirado o fallback. Se não achar o biosite pelo ID ou Slug, ele ficará como undefined
   const activeBiosite = (biosites || []).find(s => 
     s && (s.id === activeBiositeId || s.slug?.toLowerCase() === activeBiositeId?.toLowerCase())
-  ) || biosites?.[0];
+  ) || ((currentView === 'agency' || currentView === 'login') ? biosites?.[0] : undefined);
 
   const navigateView = (view: AppView) => {
     setCurrentView(view);
@@ -865,7 +853,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
 
-    // 1. Verifica se é um Cliente cadastrado
     const clientMatch = clients.find(c => c.email.toLowerCase() === cleanEmail);
     if (clientMatch) {
       if (clientMatch.status === 'blocked') {
@@ -897,7 +884,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     }
 
-    // 2. Aceita credenciais de Administrador (padrão mayconconsultoria@gmail.com / SenhaSegura123!)
     const isTargetAdmin = cleanEmail === 'mayconconsultoria@gmail.com' && cleanPassword === 'SenhaSegura123!';
     const isValidFormat = cleanEmail.includes('@') && cleanPassword.length >= 4;
 
