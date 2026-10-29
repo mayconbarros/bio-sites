@@ -6,6 +6,11 @@ import dotenv from 'dotenv';
 import { neon } from '@neondatabase/serverless';
 import { put } from '@vercel/blob';
 
+// Digite essas duas linhas abaixo:
+import crypto from 'crypto';
+import { enviarEmailRecuperacao } from './api/email';
+
+
 // Load environment variables (.env, .env.local, etc.)
 dotenv.config({ override: true });
 
@@ -888,6 +893,57 @@ app.post('/api/upload', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[Upload] Erro geral:', err);
     return res.status(500).json({ error: err?.message || 'Falha ao salvar arquivo' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// RECUPERAÇÃO DE SENHA (Esqueci minha senha)
+// -----------------------------------------------------------------------------
+app.post('/api/esqueci-senha', async (req: Request, res: Response) => {
+  setNoCacheHeaders(res); // Usa a função de segurança que já existe no seu arquivo
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ erro: 'E-mail é obrigatório' });
+  }
+
+  try {
+    // Usa o mesmo padrão de verificação de fallback que o resto do seu projeto usa
+    if (!sql || !sqlActive) {
+      return res.status(500).json({ erro: 'Banco de dados indisponível para recuperação de senha no momento.' });
+    }
+
+    // 1. Procura o usuário na tabela 'clients' usando a sintaxe nativa do seu projeto
+    const result = await sql`SELECT id FROM clients WHERE email = ${email} LIMIT 1;`;
+
+    // Segurança: se não achar, finja que enviou para hackers não descobrirem emails válidos
+    if (result.length === 0) {
+      return res.json({ mensagem: 'Se o e-mail existir no nosso sistema, um link foi enviado.' });
+    }
+
+    // 2. Gera o código secreto (token) e a validade (1 hora a partir de agora)
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 3600000).toISOString(); // Formato ISO é seguro para o banco
+
+    // 3. Salva o token no banco para esse cliente (atualizando o registro)
+    await sql`
+      UPDATE clients 
+      SET reset_token = ${token}, reset_token_expires = ${expires} 
+      WHERE email = ${email};
+    `;
+
+    // 4. Manda o e-mail pelo Resend chamando a sua engrenagem
+    const enviou = await enviarEmailRecuperacao(email, token);
+
+    if (enviou) {
+      return res.json({ success: true, mensagem: 'Se o e-mail existir no nosso sistema, um link de recuperação foi enviado.' });
+    } else {
+      return res.status(500).json({ erro: 'Falha interna ao tentar enviar o e-mail.' });
+    }
+    
+  } catch (error: any) {
+    console.error('Erro na rota de recuperar senha:', error);
+    return res.status(500).json({ erro: 'Erro interno do servidor.' });
   }
 });
 
